@@ -10,11 +10,10 @@ import session from 'express-session';
 import { config } from 'dotenv';
 import { pool } from './db.js';
 
-import authRoutes from './routes/auth.js';
+import authRoutes from './middleware/auth.js';
 import googleAdsRoutes from './routes/googleAds.js';
 import metaAdsRoutes from './routes/metaAds.js';
 import clientsRoutes from './routes/clients.js';
-import reportsRoutes from './routes/reports.js';
 import dashboardRoutes from './routes/dashboard.js';
 
 config();
@@ -44,7 +43,6 @@ app.use('/api/auth',      authRoutes);
 app.use('/api/google',    googleAdsRoutes);
 app.use('/api/meta',      metaAdsRoutes);
 app.use('/api/clients',   clientsRoutes);
-app.use('/api/reports',   reportsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
