@@ -11,11 +11,10 @@ import { config } from 'dotenv';
 import { pool } from './db.js'; // Importante para que la DB se conecte al inicio
 
 // ── Imports de Rutas (Corregidos) ───────────────────────────
-import authRoutes from './routes/auth.js'; // <-- CAMBIADO: Antes apuntaba a middleware
+import authRoutes from './middleware/auth.js';
 import googleAdsRoutes from './routes/googleAds.js';
 import metaAdsRoutes from './routes/metaAds.js';
 import clientsRoutes from './routes/clients.js';
-import reportsRoutes from './routes/reports.js'; // Agregado por si lo usás
 import dashboardRoutes from './routes/dashboard.js';
 
 config();
@@ -57,7 +56,6 @@ app.use('/api/auth',      authRoutes);
 app.use('/api/google',    googleAdsRoutes);
 app.use('/api/meta',      metaAdsRoutes);
 app.use('/api/clients',   clientsRoutes);
-app.use('/api/reports',   reportsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // Endpoint de salud para monitoreo de Railway
