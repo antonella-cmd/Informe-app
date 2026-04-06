@@ -3,7 +3,7 @@
 // ============================================================
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { requireClientAccess } from '../middleware/clientAccess.js';
+import { requireClientAccess } from '../middleware/auth.js';
 import * as meta from '../services/metaAds.js';
 
 const router = Router();
