@@ -1,0 +1,52 @@
+/* ============================================================
+   src/index.css — Global styles & CSS variables
+   ============================================================ */
+
+:root {
+  --bg:            #0D0F14;
+  --surface:       #161920;
+  --surface2:      #1E2230;
+  --border:        rgba(255,255,255,0.07);
+  --text:          #F0F2F8;
+  --muted:         #7A8099;
+  --accent-purple: #9B6DFF;
+  --accent-g:      #4285F4;
+  --accent-m:      #0866FF;
+  --accent-green:  #34C78A;
+  --accent-red:    #FF4D6A;
+  --accent-yellow: #FFB547;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+/* Input date color scheme */
+input[type="date"] { color-scheme: dark; }
+
+/* Focus ring */
+button:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 2px;
+}
+
+/* Loader spinner */
+.loader {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-purple);
+  animation: spin 0.7s linear infinite;
+  margin: 80px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
