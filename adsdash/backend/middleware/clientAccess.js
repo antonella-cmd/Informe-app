@@ -1,3 +1,6 @@
+// ============================================================
+// middleware/clientAccess.js
+// ============================================================
 import { pool } from '../db.js';
 
 export async function requireClientAccess(req, res, next) {
