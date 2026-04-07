@@ -11,7 +11,7 @@ import { config } from 'dotenv';
 import { pool } from './db.js'; // Importante para que la DB se conecte al inicio
 
 // ── Imports de Rutas (Corregidos) ───────────────────────────
-import authRoutes from './middleware/auth.js';
+import authRoutes from './routes/auth.js';
 import googleAdsRoutes from './routes/googleAds.js';
 import metaAdsRoutes from './routes/metaAds.js';
 import clientsRoutes from './routes/clients.js';
