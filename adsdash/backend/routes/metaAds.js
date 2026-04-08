@@ -20,7 +20,7 @@ router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
   const clientId = state?.split(':')[1];
   await meta.exchangeMetaCode(code, clientId);
-  res.redirect(`${process.env.FRONTEND_URL}/clients/${clientId}?connected=meta`);
+  res.redirect(`${process.env.FRONTEND_URL}/clients/${clientId}/connections?connected=meta`);
 });
 
 // GET /api/meta/accounts?clientId=X
