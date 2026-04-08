@@ -18,7 +18,11 @@ export default function LoginPage() {
   const submit = async () => {
     setError(''); setLoading(true);
     try {
-      await login(email, password);
+      if (isReg) {
+        await register(name, email, password);
+      } else {
+        await login(email, password);
+      }
       navigate('/');
     } catch (e) {
       setError(e.response?.data?.error || 'Error al iniciar sesión');
