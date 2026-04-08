@@ -1,7 +1,3 @@
-// ============================================================
-// Meta Ads Service
-// Uses Meta Marketing API v20.0 via direct fetch calls
-// ============================================================
 import fetch from 'node-fetch';
 import { pool } from '../db.js';
 import { config } from 'dotenv';
@@ -9,7 +5,6 @@ config();
 
 const GRAPH = 'https://graph.facebook.com/v20.0';
 
-// ── OAuth2 helpers ────────────────────────────────────────
 export function getMetaAuthUrl(state) {
   const params = new URLSearchParams({
     client_id:     process.env.META_APP_ID,
@@ -32,11 +27,10 @@ export async function exchangeMetaCode(code, clientId) {
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
 
-  // Exchange for long-lived token
   const llRes = await fetch(`${GRAPH}/oauth/access_token?` + new URLSearchParams({
-    grant_type:    'fb_exchange_token',
-    client_id:     process.env.META_APP_ID,
-    client_secret: process.env.META_APP_SECRET,
+    grant_type:        'fb_exchange_token',
+    client_id:         process.env.META_APP_ID,
+    client_secret:     process.env.META_APP_SECRET,
     fb_exchange_token: data.access_token,
   }));
   const ll = await llRes.json();
@@ -53,8 +47,18 @@ export async function exchangeMetaCode(code, clientId) {
   return token;
 }
 
-// ── Internal helper ───────────────────────────────────────
 async function getToken(clientId) {
+  if (process.env.META_SYSTEM_TOKEN) {
+    const { rows } = await pool.query(
+      `SELECT account_id FROM platform_connections
+       WHERE client_id = $1 AND platform = 'meta_ads'`,
+      [clientId]
+    );
+    return {
+      access_token: process.env.META_SYSTEM_TOKEN,
+      account_id: rows[0]?.account_id || null,
+    };
+  }
   const { rows } = await pool.query(
     `SELECT access_token, account_id FROM platform_connections
      WHERE client_id = $1 AND platform = 'meta_ads'`,
@@ -72,7 +76,6 @@ async function metaGet(path, params, token) {
   return data;
 }
 
-// ── List ad accounts ──────────────────────────────────────
 export async function listAdAccounts(clientId) {
   const { access_token } = await getToken(clientId);
   const data = await metaGet('me/adaccounts', {
@@ -87,7 +90,6 @@ export async function listAdAccounts(clientId) {
   }));
 }
 
-// ── Account-level insights (KPIs) ─────────────────────────
 export async function fetchMetaSummary(clientId, { startDate, endDate, accountId }) {
   const { access_token, account_id } = await getToken(clientId);
   const actId = accountId || account_id;
@@ -116,7 +118,6 @@ export async function fetchMetaSummary(clientId, { startDate, endDate, accountId
   };
 }
 
-// ── Campaign-level metrics ────────────────────────────────
 export async function fetchMetaCampaigns(clientId, { startDate, endDate, accountId }) {
   const { access_token, account_id } = await getToken(clientId);
   const actId = accountId || account_id;
@@ -131,10 +132,10 @@ export async function fetchMetaCampaigns(clientId, { startDate, endDate, account
   }, access_token);
 
   return (data.data || []).map(c => {
-    const ins      = c.insights?.data?.[0] || {};
-    const conv     = (ins.actions || []).find(a => a.action_type === 'purchase')?.value || 0;
-    const revenue  = (ins.action_values || []).find(a => a.action_type === 'purchase')?.value || 0;
-    const spend    = Number(ins.spend || 0);
+    const ins     = c.insights?.data?.[0] || {};
+    const conv    = (ins.actions || []).find(a => a.action_type === 'purchase')?.value || 0;
+    const revenue = (ins.action_values || []).find(a => a.action_type === 'purchase')?.value || 0;
+    const spend   = Number(ins.spend || 0);
 
     return {
       id:          c.id,
@@ -156,7 +157,6 @@ export async function fetchMetaCampaigns(clientId, { startDate, endDate, account
   });
 }
 
-// ── Daily time-series ─────────────────────────────────────
 export async function fetchMetaTimeSeries(clientId, { startDate, endDate, accountId }) {
   const { access_token, account_id } = await getToken(clientId);
   const actId = accountId || account_id;
@@ -183,7 +183,6 @@ export async function fetchMetaTimeSeries(clientId, { startDate, endDate, accoun
   });
 }
 
-// ── Ad Set breakdown ──────────────────────────────────────
 export async function fetchMetaAdSets(clientId, { startDate, endDate, campaignId, accountId }) {
   const { access_token, account_id } = await getToken(clientId);
   const actId = accountId || account_id;
