@@ -20,7 +20,7 @@ router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
   const clientId = state?.split(':')[1];
   await google.exchangeCodeAndSave(code, clientId);
-  res.redirect(`${process.env.FRONTEND_URL}/clients/${clientId}?connected=google`);
+res.redirect(`${process.env.FRONTEND_URL}/clients/${clientId}/connections?connected=google`);
 });
 
 // GET /api/google/accounts?clientId=X
