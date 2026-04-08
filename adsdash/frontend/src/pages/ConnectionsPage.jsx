@@ -2,6 +2,29 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { googleAPI, metaAPI, clientsAPI } from '../services/api';
 
+const ALL_ACCOUNTS = [
+  { id: '1599347358', name: 'PLAN B' },
+  { id: '6836817994', name: 'Stanley Uruguay' },
+  { id: '1724645144', name: 'Pelikano' },
+  { id: '2162256455', name: 'El Resero' },
+  { id: '1955229163', name: 'Blancoamor' },
+  { id: '9514948314', name: 'Protalia (Cancelado)' },
+  { id: '3430926137', name: 'Kent (Cancelado)' },
+  { id: '1775409011', name: 'HomeCo ARS' },
+  { id: '8604416356', name: 'PTI - Campañas (MCC)' },
+  { id: '9062270595', name: 'Contacto Dental' },
+  { id: '6997610629', name: 'PTI Consulting Partner' },
+  { id: '1301708474', name: 'ARTPARK Bosque Urbano Vertical' },
+  { id: '1893109843', name: 'Jacana' },
+  { id: '9918177713', name: 'Consulting Partner' },
+  { id: '4132884186', name: 'Hogares Modernos Bazar' },
+  { id: '4405049047', name: 'Protalia' },
+  { id: '3132093542', name: 'The Game House' },
+  { id: '8284056099', name: 'Oslo Argentina' },
+  { id: '2174109270', name: 'Fideos Adria' },
+  { id: '1625738194', name: 'Alberta Housing' },
+];
+
 export default function ConnectionsPage() {
   const { clientId } = useParams();
   const [searchParams] = useSearchParams();
@@ -9,7 +32,6 @@ export default function ConnectionsPage() {
   const [conns, setConns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [savingAccount, setSavingAccount] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [accountSaved, setAccountSaved] = useState(false);
@@ -23,11 +45,7 @@ export default function ConnectionsPage() {
 
   useEffect(() => {
     if (searchParams.get('connected') === 'google') {
-      setLoadingAccounts(true);
-      googleAPI.accounts(clientId)
-        .then(r => setAccounts(r.data || []))
-        .catch(() => setAccounts([]))
-        .finally(() => setLoadingAccounts(false));
+      setAccounts(ALL_ACCOUNTS);
     }
   }, [searchParams, clientId]);
 
@@ -45,7 +63,7 @@ export default function ConnectionsPage() {
     if (!selectedAccount) return;
     setSavingAccount(true);
     try {
-      const account = accounts.find(a => a.id === selectedAccount);
+      const account = ALL_ACCOUNTS.find(a => a.id === selectedAccount);
       await import('../services/api').then(m =>
         m.default.patch(`/clients/${clientId}/connections/google_ads`, {
           account_id: selectedAccount,
@@ -114,49 +132,36 @@ export default function ConnectionsPage() {
                 </div>
               </div>
 
-              {/* Selector de cuentas */}
-              {justConnectedGoogle && !accountSaved && (
+              {justConnectedGoogle && !accountSaved && accounts.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>
                     Seleccioná la cuenta de Google Ads de este cliente:
                   </div>
-                  {loadingAccounts ? (
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>Cargando cuentas…</div>
-                  ) : accounts.length > 0 ? (
-                    <>
-                      <select
-                        value={selectedAccount}
-                        onChange={e => setSelectedAccount(e.target.value)}
-                        style={{
-                          width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-                          borderRadius: 8, padding: '8px 12px', color: 'var(--text)',
-                          fontSize: 13, marginBottom: 8, outline: 'none',
-                        }}
-                      >
-                        <option value="">-- Elegir cuenta --</option>
-                        {accounts.map(a => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} ({a.id})
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={saveAccount}
-                        disabled={!selectedAccount || savingAccount}
-                        style={{
-                          width: '100%', padding: '8px', borderRadius: 8, border: 'none',
-                          background: '#4285F4', color: '#fff', cursor: 'pointer',
-                          fontSize: 13, fontWeight: 600, opacity: savingAccount ? 0.6 : 1,
-                        }}
-                      >
-                        {savingAccount ? 'Guardando…' : 'Guardar cuenta'}
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 12, color: '#FFB547' }}>
-                      No se encontraron cuentas accesibles. Verificá que tu MCC tenga acceso.
-                    </div>
-                  )}
+                  <select
+                    value={selectedAccount}
+                    onChange={e => setSelectedAccount(e.target.value)}
+                    style={{
+                      width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
+                      borderRadius: 8, padding: '8px 12px', color: 'var(--text)',
+                      fontSize: 13, marginBottom: 8, outline: 'none',
+                    }}
+                  >
+                    <option value="">-- Elegir cuenta --</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={saveAccount}
+                    disabled={!selectedAccount || savingAccount}
+                    style={{
+                      width: '100%', padding: '8px', borderRadius: 8, border: 'none',
+                      background: '#4285F4', color: '#fff', cursor: 'pointer',
+                      fontSize: 13, fontWeight: 600, opacity: savingAccount ? 0.6 : 1,
+                    }}
+                  >
+                    {savingAccount ? 'Guardando…' : 'Guardar cuenta'}
+                  </button>
                 </div>
               )}
 
