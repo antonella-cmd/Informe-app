@@ -25,16 +25,31 @@ const ALL_ACCOUNTS = [
   { id: '1625738194', name: 'Alberta Housing' },
 ];
 
+const ALL_META_ACCOUNTS = [
+  { id: 'act_897427701361363',  name: 'Adria Fideos' },
+  { id: 'act_1719820121896080', name: 'Pelikano Hogar' },
+  { id: 'act_569768295590325',  name: 'Home Co' },
+  { id: 'act_796458579550761',  name: 'Lua Femme' },
+  { id: 'act_1338463620723035', name: 'The Game House / Stanley' },
+  { id: 'act_370565048018995',  name: 'Plan B' },
+];
+
 export default function ConnectionsPage() {
   const { clientId } = useParams();
   const [searchParams] = useSearchParams();
   const [client, setClient] = useState(null);
   const [conns, setConns] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [accounts, setAccounts] = useState([]);
-  const [savingAccount, setSavingAccount] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState('');
+  const [savingAccount, setSavingAccount] = useState(false);
   const [accountSaved, setAccountSaved] = useState(false);
+
+  const [metaAccounts, setMetaAccounts] = useState([]);
+  const [selectedMetaAccount, setSelectedMetaAccount] = useState('');
+  const [savingMetaAccount, setSavingMetaAccount] = useState(false);
+  const [metaAccountSaved, setMetaAccountSaved] = useState(false);
 
   useEffect(() => {
     clientsAPI.get(clientId).then(r => {
@@ -44,9 +59,8 @@ export default function ConnectionsPage() {
   }, [clientId]);
 
   useEffect(() => {
-    if (searchParams.get('connected') === 'google') {
-      setAccounts(ALL_ACCOUNTS);
-    }
+    if (searchParams.get('connected') === 'google') setAccounts(ALL_ACCOUNTS);
+    if (searchParams.get('connected') === 'meta') setMetaAccounts(ALL_META_ACCOUNTS);
   }, [searchParams, clientId]);
 
   const connectGoogle = async () => {
@@ -71,15 +85,26 @@ export default function ConnectionsPage() {
         })
       );
       setAccountSaved(true);
-      clientsAPI.get(clientId).then(r => {
-        setClient(r.data);
-        setConns(r.data.connections || []);
-      });
-    } catch(e) {
-      alert('Error al guardar la cuenta');
-    } finally {
-      setSavingAccount(false);
-    }
+      clientsAPI.get(clientId).then(r => { setClient(r.data); setConns(r.data.connections || []); });
+    } catch(e) { alert('Error al guardar la cuenta'); }
+    finally { setSavingAccount(false); }
+  };
+
+  const saveMetaAccount = async () => {
+    if (!selectedMetaAccount) return;
+    setSavingMetaAccount(true);
+    try {
+      const account = ALL_META_ACCOUNTS.find(a => a.id === selectedMetaAccount);
+      await import('../services/api').then(m =>
+        m.default.patch(`/clients/${clientId}/connections/meta_ads`, {
+          account_id: selectedMetaAccount,
+          account_name: account?.name || selectedMetaAccount,
+        })
+      );
+      setMetaAccountSaved(true);
+      clientsAPI.get(clientId).then(r => { setClient(r.data); setConns(r.data.connections || []); });
+    } catch(e) { alert('Error al guardar la cuenta'); }
+    finally { setSavingMetaAccount(false); }
   };
 
   const disconnectPlatform = async (platform) => {
@@ -88,13 +113,14 @@ export default function ConnectionsPage() {
       m.default.delete(`/clients/${clientId}/connections/${platform}`)
     );
     setConns(prev => prev.filter(c => c.platform !== platform));
-    setAccountSaved(false);
-    setAccounts([]);
+    if (platform === 'google_ads') { setAccountSaved(false); setAccounts([]); }
+    if (platform === 'meta_ads') { setMetaAccountSaved(false); setMetaAccounts([]); }
   };
 
   const gConn = conns.find(c => c.platform === 'google_ads');
   const mConn = conns.find(c => c.platform === 'meta_ads');
   const justConnectedGoogle = searchParams.get('connected') === 'google';
+  const justConnectedMeta = searchParams.get('connected') === 'meta';
 
   if (loading) return <div style={{ padding: 40, color: 'var(--muted)' }}>Cargando…</div>;
 
@@ -108,11 +134,7 @@ export default function ConnectionsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
         {/* GOOGLE ADS */}
-        <div style={{
-          background: 'var(--surface)',
-          border: `1px solid ${gConn ? '#4285F444' : 'var(--border)'}`,
-          borderRadius: 14, padding: 24,
-        }}>
+        <div style={{ background: 'var(--surface)', border: `1px solid ${gConn ? '#4285F444' : 'var(--border)'}`, borderRadius: 14, padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: '#4285F422', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🔵</div>
             <div>
@@ -127,67 +149,33 @@ export default function ConnectionsPage() {
             <>
               <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Cuenta conectada</div>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>
-                  {gConn.account_name || gConn.account_id || 'Sin cuenta seleccionada'}
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{gConn.account_name || gConn.account_id || 'Sin cuenta seleccionada'}</div>
               </div>
-
               {justConnectedGoogle && !accountSaved && accounts.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>
-                    Seleccioná la cuenta de Google Ads de este cliente:
-                  </div>
-                  <select
-                    value={selectedAccount}
-                    onChange={e => setSelectedAccount(e.target.value)}
-                    style={{
-                      width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-                      borderRadius: 8, padding: '8px 12px', color: 'var(--text)',
-                      fontSize: 13, marginBottom: 8, outline: 'none',
-                    }}
-                  >
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Seleccioná la cuenta de Google Ads:</div>
+                  <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}
+                    style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, marginBottom: 8, outline: 'none' }}>
                     <option value="">-- Elegir cuenta --</option>
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
-                    ))}
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.id})</option>)}
                   </select>
-                  <button
-                    onClick={saveAccount}
-                    disabled={!selectedAccount || savingAccount}
-                    style={{
-                      width: '100%', padding: '8px', borderRadius: 8, border: 'none',
-                      background: '#4285F4', color: '#fff', cursor: 'pointer',
-                      fontSize: 13, fontWeight: 600, opacity: savingAccount ? 0.6 : 1,
-                    }}
-                  >
+                  <button onClick={saveAccount} disabled={!selectedAccount || savingAccount}
+                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: 'none', background: '#4285F4', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: savingAccount ? 0.6 : 1 }}>
                     {savingAccount ? 'Guardando…' : 'Guardar cuenta'}
                   </button>
                 </div>
               )}
-
-              {accountSaved && (
-                <div style={{ fontSize: 12, color: '#34C78A', marginBottom: 12 }}>
-                  ✓ Cuenta guardada correctamente
-                </div>
-              )}
-
-              <button onClick={() => disconnectPlatform('google_ads')} style={{
-                width: '100%', padding: '9px', borderRadius: 8,
-                border: '1px solid rgba(255,77,106,0.4)', background: 'rgba(255,77,106,0.08)',
-                color: '#FF4D6A', cursor: 'pointer', fontSize: 13,
-              }}>
+              {accountSaved && <div style={{ fontSize: 12, color: '#34C78A', marginBottom: 12 }}>✓ Cuenta guardada</div>}
+              <button onClick={() => disconnectPlatform('google_ads')}
+                style={{ width: '100%', padding: '9px', borderRadius: 8, border: '1px solid rgba(255,77,106,0.4)', background: 'rgba(255,77,106,0.08)', color: '#FF4D6A', cursor: 'pointer', fontSize: 13 }}>
                 Desconectar
               </button>
             </>
           ) : (
             <>
-              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>
-                Conecta tu cuenta de Google Ads para ver campañas, palabras clave y métricas de conversión.
-              </p>
-              <button onClick={connectGoogle} style={{
-                width: '100%', padding: '10px', borderRadius: 8, border: 'none',
-                background: '#4285F4', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              }}>
+              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>Conecta tu cuenta de Google Ads para ver campañas, palabras clave y métricas de conversión.</p>
+              <button onClick={connectGoogle}
+                style={{ width: '100%', padding: '10px', borderRadius: 8, border: 'none', background: '#4285F4', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                 Conectar Google Ads
               </button>
             </>
@@ -195,11 +183,7 @@ export default function ConnectionsPage() {
         </div>
 
         {/* META ADS */}
-        <div style={{
-          background: 'var(--surface)',
-          border: `1px solid ${mConn ? '#0866FF44' : 'var(--border)'}`,
-          borderRadius: 14, padding: 24,
-        }}>
+        <div style={{ background: 'var(--surface)', border: `1px solid ${mConn ? '#0866FF44' : 'var(--border)'}`, borderRadius: 14, padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: '#0866FF22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🔷</div>
             <div>
@@ -212,29 +196,35 @@ export default function ConnectionsPage() {
 
           {mConn ? (
             <>
-              <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+              <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Cuenta conectada</div>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>
-                  {mConn.account_name || mConn.account_id || 'Sin cuenta seleccionada'}
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{mConn.account_name || mConn.account_id || 'Sin cuenta seleccionada'}</div>
               </div>
-              <button onClick={() => disconnectPlatform('meta_ads')} style={{
-                width: '100%', padding: '9px', borderRadius: 8,
-                border: '1px solid rgba(255,77,106,0.4)', background: 'rgba(255,77,106,0.08)',
-                color: '#FF4D6A', cursor: 'pointer', fontSize: 13,
-              }}>
+              {justConnectedMeta && !metaAccountSaved && metaAccounts.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Seleccioná la cuenta de Meta Ads:</div>
+                  <select value={selectedMetaAccount} onChange={e => setSelectedMetaAccount(e.target.value)}
+                    style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--text)', fontSize: 13, marginBottom: 8, outline: 'none' }}>
+                    <option value="">-- Elegir cuenta --</option>
+                    {metaAccounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.id})</option>)}
+                  </select>
+                  <button onClick={saveMetaAccount} disabled={!selectedMetaAccount || savingMetaAccount}
+                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: 'none', background: '#0866FF', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: savingMetaAccount ? 0.6 : 1 }}>
+                    {savingMetaAccount ? 'Guardando…' : 'Guardar cuenta'}
+                  </button>
+                </div>
+              )}
+              {metaAccountSaved && <div style={{ fontSize: 12, color: '#34C78A', marginBottom: 12 }}>✓ Cuenta guardada</div>}
+              <button onClick={() => disconnectPlatform('meta_ads')}
+                style={{ width: '100%', padding: '9px', borderRadius: 8, border: '1px solid rgba(255,77,106,0.4)', background: 'rgba(255,77,106,0.08)', color: '#FF4D6A', cursor: 'pointer', fontSize: 13 }}>
                 Desconectar
               </button>
             </>
           ) : (
             <>
-              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>
-                Conecta tu cuenta de Meta para ver campañas de Facebook e Instagram, audiencias y ROAS.
-              </p>
-              <button onClick={connectMeta} style={{
-                width: '100%', padding: '10px', borderRadius: 8, border: 'none',
-                background: '#0866FF', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              }}>
+              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>Conecta tu cuenta de Meta para ver campañas de Facebook e Instagram, audiencias y ROAS.</p>
+              <button onClick={connectMeta}
+                style={{ width: '100%', padding: '10px', borderRadius: 8, border: 'none', background: '#0866FF', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                 Conectar Meta Ads
               </button>
             </>
@@ -242,17 +232,11 @@ export default function ConnectionsPage() {
         </div>
       </div>
 
-      <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
-        padding: 20, marginTop: 24,
-      }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginTop: 24 }}>
         <div style={{ fontWeight: 600, marginBottom: 12 }}>Antes de conectar</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
-          <strong style={{ color: 'var(--text)' }}>Google Ads:</strong> el cliente debe otorgar acceso
-          a la cuenta desde Google Ads → Herramientas → Accesos y seguridad, o bien darte acceso
-          a través de tu cuenta MCC (Manager Account).<br /><br />
-          <strong style={{ color: 'var(--text)' }}>Meta Ads:</strong> el cliente debe agregarte como
-          socio en Business Manager → Socios → Compartir activos, con permiso de <em>Analista</em> o superior.
+          <strong style={{ color: 'var(--text)' }}>Google Ads:</strong> el cliente debe otorgar acceso a la cuenta desde Google Ads → Herramientas → Accesos y seguridad, o bien darte acceso a través de tu cuenta MCC (Manager Account).<br /><br />
+          <strong style={{ color: 'var(--text)' }}>Meta Ads:</strong> el cliente debe agregarte como socio en Business Manager → Socios → Compartir activos, con permiso de <em>Analista</em> o superior.
         </div>
       </div>
     </div>
