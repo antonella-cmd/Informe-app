@@ -1,6 +1,3 @@
-// ============================================================
-// src/context/AuthContext.jsx
-// ============================================================
 import { createContext, useContext, useEffect, useState } from 'react';
 import { authAPI } from '../services/api';
 
@@ -23,13 +20,19 @@ export function AuthProvider({ children }) {
     return r.data;
   };
 
+  const register = async (name, email, password) => {
+    const r = await authAPI.register(name, email, password);
+    setUser(r.data);
+    return r.data;
+  };
+
   const logout = async () => {
     await authAPI.logout();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
