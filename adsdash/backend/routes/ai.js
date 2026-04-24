@@ -1,5 +1,6 @@
 // ============================================================
 // routes/ai.js — Análisis IA con Claude API
+// Usa metrics_snapshots (tabla existente) + campaign_metrics si hay
 // ============================================================
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -19,94 +20,144 @@ router.post('/:clientId/insights', requireClientAccess, async (req, res, next) =
       return res.status(400).json({ error: 'start_date y end_date son requeridos' });
     }
 
-    // Calcular período anterior (misma duración)
-    const start = new Date(start_date);
-    const end = new Date(end_date);
+    // Período anterior (misma duración)
+    const start    = new Date(start_date);
+    const end      = new Date(end_date);
     const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    const prevEnd = new Date(start);
+    const prevEnd  = new Date(start);
     prevEnd.setDate(prevEnd.getDate() - 1);
     const prevStart = new Date(prevEnd);
     prevStart.setDate(prevStart.getDate() - diffDays);
-
     const prevStartStr = prevStart.toISOString().split('T')[0];
     const prevEndStr   = prevEnd.toISOString().split('T')[0];
 
-    // Traer nombre del cliente
+    // Cliente
     const { rows: clientRows } = await pool.query(
-      `SELECT name, country FROM clients WHERE id = $1`, [clientId]
+      `SELECT name, country, currency FROM clients WHERE id = $1`, [clientId]
     );
     if (!clientRows.length) return res.status(404).json({ error: 'Cliente no encontrado' });
     const client = clientRows[0];
 
-    // Métricas período actual
-    const { rows: currentMetrics } = await pool.query(`
-      SELECT
-        SUM(spend)::numeric       AS spend,
-        SUM(clicks)::numeric      AS clicks,
-        SUM(impressions)::numeric AS impressions,
-        SUM(conversions)::numeric AS conversions,
-        SUM(revenue)::numeric     AS revenue,
-        AVG(ctr)::numeric         AS ctr,
-        AVG(cpc)::numeric         AS cpc,
-        AVG(roas)::numeric        AS roas
-      FROM campaign_metrics cm
-      JOIN campaigns c ON c.id = cm.campaign_id
-      JOIN ad_accounts a ON a.id = c.ad_account_id
-      WHERE a.client_id = $1
-        AND cm.date BETWEEN $2 AND $3
-    `, [clientId, start_date, end_date]);
+    // Intentar traer métricas desde campaign_metrics primero, luego metrics_snapshots
+    let currentMetrics = null;
+    let prevMetrics    = null;
+    let topCampaigns   = [];
 
-    // Métricas período anterior
-    const { rows: prevMetrics } = await pool.query(`
-      SELECT
-        SUM(spend)::numeric       AS spend,
-        SUM(clicks)::numeric      AS clicks,
-        SUM(impressions)::numeric AS impressions,
-        SUM(conversions)::numeric AS conversions,
-        SUM(revenue)::numeric     AS revenue,
-        AVG(ctr)::numeric         AS ctr,
-        AVG(cpc)::numeric         AS cpc,
-        AVG(roas)::numeric        AS roas
-      FROM campaign_metrics cm
-      JOIN campaigns c ON c.id = cm.campaign_id
-      JOIN ad_accounts a ON a.id = c.ad_account_id
-      WHERE a.client_id = $1
-        AND cm.date BETWEEN $2 AND $3
-    `, [clientId, prevStartStr, prevEndStr]);
+    // Intentar campaign_metrics (si hay datos importados por Excel/APIs)
+    try {
+      const { rows: cm } = await pool.query(`
+        SELECT
+          SUM(cm.spend)::numeric       AS spend,
+          SUM(cm.clicks)::numeric      AS clicks,
+          SUM(cm.impressions)::numeric AS impressions,
+          SUM(cm.conversions)::numeric AS conversions,
+          SUM(cm.revenue)::numeric     AS revenue,
+          AVG(cm.ctr)::numeric         AS ctr,
+          AVG(cm.cpc)::numeric         AS cpc,
+          AVG(cm.roas)::numeric        AS roas
+        FROM campaign_metrics cm
+        JOIN campaigns c ON c.id = cm.campaign_id
+        JOIN ad_accounts a ON a.id = c.ad_account_id
+        WHERE a.client_id = $1 AND cm.date BETWEEN $2 AND $3
+      `, [clientId, start_date, end_date]);
 
-    // Top campañas por ROAS
-    const { rows: topCampaigns } = await pool.query(`
-      SELECT
-        c.name,
-        c.platform,
-        c.status,
-        SUM(cm.spend)::numeric       AS spend,
-        AVG(cm.roas)::numeric        AS roas,
-        SUM(cm.conversions)::numeric AS conversions,
-        AVG(cm.ctr)::numeric         AS ctr
-      FROM campaign_metrics cm
-      JOIN campaigns c ON c.id = cm.campaign_id
-      JOIN ad_accounts a ON a.id = c.ad_account_id
-      WHERE a.client_id = $1
-        AND cm.date BETWEEN $2 AND $3
-      GROUP BY c.id, c.name, c.platform, c.status
-      ORDER BY roas DESC NULLS LAST
-      LIMIT 5
-    `, [clientId, start_date, end_date]);
+      if (cm[0] && Number(cm[0].spend) > 0) {
+        currentMetrics = cm[0];
 
-    // Llamar Claude API
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicApiKey) {
-      return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada' });
+        const { rows: pm } = await pool.query(`
+          SELECT
+            SUM(cm.spend)::numeric       AS spend,
+            SUM(cm.clicks)::numeric      AS clicks,
+            SUM(cm.impressions)::numeric AS impressions,
+            SUM(cm.conversions)::numeric AS conversions,
+            SUM(cm.revenue)::numeric     AS revenue,
+            AVG(cm.ctr)::numeric         AS ctr,
+            AVG(cm.cpc)::numeric         AS cpc,
+            AVG(cm.roas)::numeric        AS roas
+          FROM campaign_metrics cm
+          JOIN campaigns c ON c.id = cm.campaign_id
+          JOIN ad_accounts a ON a.id = c.ad_account_id
+          WHERE a.client_id = $1 AND cm.date BETWEEN $2 AND $3
+        `, [clientId, prevStartStr, prevEndStr]);
+        prevMetrics = pm[0];
+
+        const { rows: tc } = await pool.query(`
+          SELECT c.name, a.platform, c.status,
+            SUM(cm.spend)::numeric       AS spend,
+            AVG(cm.roas)::numeric        AS roas,
+            SUM(cm.conversions)::numeric AS conversions,
+            AVG(cm.ctr)::numeric         AS ctr
+          FROM campaign_metrics cm
+          JOIN campaigns c ON c.id = cm.campaign_id
+          JOIN ad_accounts a ON a.id = c.ad_account_id
+          WHERE a.client_id = $1 AND cm.date BETWEEN $2 AND $3
+          GROUP BY c.id, c.name, a.platform, c.status
+          ORDER BY roas DESC NULLS LAST
+          LIMIT 5
+        `, [clientId, start_date, end_date]);
+        topCampaigns = tc;
+      }
+    } catch (_) {}
+
+    // Fallback: metrics_snapshots (datos de Google/Meta API)
+    if (!currentMetrics) {
+      const { rows: ms } = await pool.query(`
+        SELECT
+          SUM(spend)::numeric       AS spend,
+          SUM(clicks)::numeric      AS clicks,
+          SUM(impressions)::numeric AS impressions,
+          SUM(conversions)::numeric AS conversions,
+          SUM(revenue)::numeric     AS revenue,
+          CASE WHEN SUM(impressions) > 0 THEN (SUM(clicks)::numeric / SUM(impressions)) * 100 ELSE 0 END AS ctr,
+          CASE WHEN SUM(clicks) > 0 THEN SUM(spend)::numeric / SUM(clicks) ELSE 0 END AS cpc,
+          CASE WHEN SUM(spend) > 0 THEN SUM(revenue)::numeric / SUM(spend) ELSE 0 END AS roas
+        FROM metrics_snapshots
+        WHERE client_id = $1 AND date BETWEEN $2 AND $3
+      `, [clientId, start_date, end_date]);
+      currentMetrics = ms[0];
+
+      const { rows: pms } = await pool.query(`
+        SELECT
+          SUM(spend)::numeric       AS spend,
+          SUM(clicks)::numeric      AS clicks,
+          SUM(impressions)::numeric AS impressions,
+          SUM(conversions)::numeric AS conversions,
+          SUM(revenue)::numeric     AS revenue,
+          CASE WHEN SUM(impressions) > 0 THEN (SUM(clicks)::numeric / SUM(impressions)) * 100 ELSE 0 END AS ctr,
+          CASE WHEN SUM(clicks) > 0 THEN SUM(spend)::numeric / SUM(clicks) ELSE 0 END AS cpc,
+          CASE WHEN SUM(spend) > 0 THEN SUM(revenue)::numeric / SUM(spend) ELSE 0 END AS roas
+        FROM metrics_snapshots
+        WHERE client_id = $1 AND date BETWEEN $2 AND $3
+      `, [clientId, prevStartStr, prevEndStr]);
+      prevMetrics = pms[0];
+
+      const { rows: tc } = await pool.query(`
+        SELECT campaign_name AS name, platform, 'active' AS status,
+          SUM(spend)::numeric       AS spend,
+          CASE WHEN SUM(spend) > 0 THEN SUM(revenue)::numeric / SUM(spend) ELSE 0 END AS roas,
+          SUM(conversions)::numeric AS conversions,
+          CASE WHEN SUM(impressions) > 0 THEN (SUM(clicks)::numeric / SUM(impressions)) * 100 ELSE 0 END AS ctr
+        FROM metrics_snapshots
+        WHERE client_id = $1 AND date BETWEEN $2 AND $3 AND campaign_name IS NOT NULL
+        GROUP BY campaign_name, platform
+        ORDER BY roas DESC NULLS LAST
+        LIMIT 5
+      `, [clientId, start_date, end_date]);
+      topCampaigns = tc;
     }
 
-    const prompt = `Analizá los datos de campañas publicitarias del cliente ${client.name} (${client.country}) para el período ${start_date} al ${end_date}.
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicApiKey) {
+      return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada en las variables de entorno de Railway' });
+    }
+
+    const prompt = `Analizá los datos de campañas publicitarias del cliente ${client.name} (${client.country || 'Argentina'}) para el período ${start_date} al ${end_date}.
 
 MÉTRICAS DEL PERÍODO ACTUAL:
-${JSON.stringify(currentMetrics[0] || {}, null, 2)}
+${JSON.stringify(currentMetrics || {}, null, 2)}
 
 MÉTRICAS DEL PERÍODO ANTERIOR (${prevStartStr} al ${prevEndStr}):
-${JSON.stringify(prevMetrics[0] || {}, null, 2)}
+${JSON.stringify(prevMetrics || {}, null, 2)}
 
 TOP CAMPAÑAS:
 ${JSON.stringify(topCampaigns, null, 2)}
@@ -154,15 +205,19 @@ Respondé ÚNICAMENTE con este JSON sin texto adicional ni backticks:
     });
 
     const claudeData = await claudeRes.json();
-    const rawText = claudeData.content?.[0]?.text || '{}';
 
+    if (claudeData.error) {
+      return res.status(500).json({ error: `Error de Claude API: ${claudeData.error.message}` });
+    }
+
+    const rawText = claudeData.content?.[0]?.text || '{}';
     let analysis;
     try {
       analysis = JSON.parse(rawText);
     } catch {
-      // Intentar limpiar backticks si Claude los incluyó
       const clean = rawText.replace(/```json|```/g, '').trim();
-      analysis = JSON.parse(clean);
+      try { analysis = JSON.parse(clean); }
+      catch { analysis = { summary: rawText, top_insights: [], recommendations: [], alerts: [] }; }
     }
 
     res.json({
@@ -172,81 +227,6 @@ Respondé ÚNICAMENTE con este JSON sin texto adicional ni backticks:
       client: client.name,
     });
 
-  } catch (e) { next(e); }
-});
-
-// POST /api/ai/:clientId/campaign/:campaignId/analysis
-router.post('/:clientId/campaign/:campaignId/analysis', requireClientAccess, async (req, res, next) => {
-  try {
-    const { clientId, campaignId } = req.params;
-    const { start_date, end_date } = req.body;
-
-    const { rows: campaignRows } = await pool.query(
-      `SELECT c.*, a.platform FROM campaigns c JOIN ad_accounts a ON a.id = c.ad_account_id WHERE c.id = $1 AND a.client_id = $2`,
-      [campaignId, clientId]
-    );
-    if (!campaignRows.length) return res.status(404).json({ error: 'Campaña no encontrada' });
-    const campaign = campaignRows[0];
-
-    const { rows: metrics } = await pool.query(`
-      SELECT date, spend, clicks, impressions, conversions, ctr, cpc, cpm, roas
-      FROM campaign_metrics
-      WHERE campaign_id = $1 AND date BETWEEN $2 AND $3
-      ORDER BY date
-    `, [campaignId, start_date, end_date]);
-
-    const { rows: allCampaigns } = await pool.query(`
-      SELECT c.name, AVG(cm.roas) AS avg_roas, AVG(cm.ctr) AS avg_ctr, SUM(cm.spend) AS total_spend
-      FROM campaigns c
-      JOIN ad_accounts a ON a.id = c.ad_account_id
-      JOIN campaign_metrics cm ON cm.campaign_id = c.id
-      WHERE a.client_id = $1 AND cm.date BETWEEN $2 AND $3
-      GROUP BY c.id, c.name
-      ORDER BY avg_roas DESC
-    `, [clientId, start_date, end_date]);
-
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicApiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada' });
-
-    const prompt = `Realizá un análisis profundo de la campaña "${campaign.name}" (plataforma: ${campaign.platform}, estado: ${campaign.status}).
-
-MÉTRICAS DIARIAS DE LA CAMPAÑA:
-${JSON.stringify(metrics, null, 2)}
-
-COMPARATIVA CON OTRAS CAMPAÑAS DEL CLIENTE:
-${JSON.stringify(allCampaigns, null, 2)}
-
-Respondé ÚNICAMENTE con JSON:
-{
-  "summary": "Análisis ejecutivo de la campaña",
-  "performance": "high|medium|low",
-  "key_findings": ["finding1", "finding2"],
-  "recommendations": [{"action": "", "reason": "", "priority": "high|medium|low"}],
-  "trend": "improving|stable|declining"
-}`;
-
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicApiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: 'Sos analista senior de performance marketing de PTI Consulting Partner. Respondés siempre en español con análisis concretos y accionables.',
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    const claudeData = await claudeRes.json();
-    const rawText = claudeData.content?.[0]?.text || '{}';
-    let analysis;
-    try { analysis = JSON.parse(rawText); }
-    catch { analysis = JSON.parse(rawText.replace(/```json|```/g, '').trim()); }
-
-    res.json({ campaign: campaign.name, ...analysis, generated_at: new Date().toISOString() });
   } catch (e) { next(e); }
 });
 
