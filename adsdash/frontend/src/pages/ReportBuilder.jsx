@@ -74,10 +74,20 @@ const METRICS = {
   frequency:   {label:'Frecuencia',       fmt:n=>Number(n||0).toFixed(2),invert:true},
 };
 
-// Mapeo desde kpis.total_X a campo simple
+// Mapeo bidireccional: clave de métrica → clave en kpis del overview
 const kpiMap = {
-  total_spend:'spend', total_clicks:'clicks', total_impressions:'impressions',
-  total_conversions:'conversions', total_revenue:'revenue', roas:'roas', cpa:'cpa', ctr:'ctr',
+  spend:       'total_spend',
+  clicks:      'total_clicks',
+  impressions: 'total_impressions',
+  conversions: 'total_conversions',
+  revenue:     'total_revenue',
+  roas:        'roas',
+  cpa:         'cpa',
+  ctr:         'ctr',
+  cpc:         'cpc',
+  cpm:         'cpm',
+  reach:       'reach',
+  frequency:   'frequency',
 };
 
 // ── BLOCK CATALOG ───────────────────────────────────────────
@@ -212,12 +222,15 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
   // ── KPI Grid ──────────────────────────────────────────────
   if(block.type==='kpi_grid'){
     const getVal=(key)=>{
+      // kpiMap[key] da la clave en el objeto kpis del overview (ej: spend → total_spend)
       const mapped=kpiMap[key];
-      return mapped?kpis[mapped]:kpis[key];
+      if(mapped && kpis[mapped]!=null) return kpis[mapped];
+      return kpis[key]||0;
     };
     const getPrev=(key)=>{
       const mapped=kpiMap[key];
-      return mapped?prevKpis[mapped]:prevKpis[key];
+      if(mapped && prevKpis[mapped]!=null) return prevKpis[mapped];
+      return prevKpis[key]||0;
     };
     const cols=Math.min(selectedMetrics.length,4);
     return(
@@ -225,8 +238,8 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
         {selectedMetrics.map(key=>{
           const m=METRICS[key];
           if(!m) return null;
-          const val=getVal(key)||getVal('total_'+key)||kpis[key]||0;
-          const prev=getPrev(key)||getPrev('total_'+key)||prevKpis[key]||0;
+          const val=getVal(key);
+          const prev=getPrev(key);
           return(
             <div key={key} style={{background:'var(--surface)',border:'1px solid var(--border)',borderTop:`3px solid ${COLORS[selectedMetrics.indexOf(key)%COLORS.length]}`,borderRadius:12,padding:'14px 18px'}}>
               <div style={{fontSize:10,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6}}>{m.label}</div>
