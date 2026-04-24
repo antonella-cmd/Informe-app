@@ -17,6 +17,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import aiRoutes        from './routes/ai.js';
 import uploadRoutes    from './routes/upload.js';
 import adminRoutes     from './routes/admin.js';
+import adsRoutes       from './routes/ads.js';
 
 config();
 
@@ -63,6 +64,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/ai',        aiRoutes);
 app.use('/api/upload',    uploadRoutes);
 app.use('/api/admin',     adminRoutes);
+app.use('/api/ads',      adsRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
 
