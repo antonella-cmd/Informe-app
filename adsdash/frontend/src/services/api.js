@@ -74,4 +74,9 @@ export const reportsAPI = {
   share:  (id)       => api.post(`/reports/${id}/share`),
 };
 
+// ── Ads (top performers con creatividades) ────────────────────
+export const adsAPI = {
+  top: (clientId, params) => api.get(`/ads/top/${clientId}`, { params }),
+};
+
 export default api;
