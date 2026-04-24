@@ -9,6 +9,7 @@ import AgencyHome        from './pages/AgencyHome';
 import ClientPage        from './pages/ClientPage';
 import ReportsPage       from './pages/ReportsPage';
 import ReportEditor      from './pages/ReportEditor';
+import ReportBuilder     from './pages/ReportBuilder';
 import ConnectionsPage   from './pages/ConnectionsPage';
 import AIInsightsPage    from './pages/AIInsightsPage';
 import UploadPage        from './pages/UploadPage';
@@ -44,6 +45,8 @@ export default function App() {
 
             {/* Reportes */}
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports/new" element={<ReportEditor />} />
+            <Route path="reports/builder" element={<ReportBuilder />} />
             <Route path="reports/:reportId/edit" element={<ReportEditor />} />
 
             {/* Admin */}
