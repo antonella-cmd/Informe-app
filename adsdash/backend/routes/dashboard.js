@@ -1,6 +1,5 @@
 // ============================================================
-// routes/dashboard.js
-// Aggregates Google Ads + Meta Ads into a single response
+// routes/dashboard.js — con timeout para evitar carga lenta
 // ============================================================
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -12,12 +11,22 @@ import { pool }    from '../db.js';
 const router = Router();
 router.use(requireAuth);
 
+// Wrapper con timeout — si una plataforma tarda más de N ms, devuelve null
+function withTimeout(promise, ms = 8000) {
+  if (!promise) return Promise.resolve(null);
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 // GET /api/dashboard/overview?clientId=X&start=YYYY-MM-DD&end=YYYY-MM-DD
 router.get('/overview', requireClientAccess, async (req, res, next) => {
   try {
     const { clientId, start, end } = req.query;
 
-    // Find which platforms are connected
     const { rows: conns } = await pool.query(
       `SELECT platform, account_id FROM platform_connections WHERE client_id = $1`,
       [clientId]
@@ -26,20 +35,27 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
     const hasGoogle = conns.find(c => c.platform === 'google_ads');
     const hasMeta   = conns.find(c => c.platform === 'meta_ads');
 
+    // Timeout de 8 segundos por plataforma — si Google tarda, no bloquea Meta
     const [gSummary, mSummary, gCampaigns, mCampaigns, gTimeSeries, mTimeSeries] =
       await Promise.allSettled([
-        hasGoogle ? google.fetchAccountSummary(clientId,   { startDate: start, endDate: end }) : null,
-        hasMeta   ? meta.fetchMetaSummary(clientId,        { startDate: start, endDate: end }) : null,
-        hasGoogle ? google.fetchCampaignMetrics(clientId,  { startDate: start, endDate: end }) : null,
-        hasMeta   ? meta.fetchMetaCampaigns(clientId,      { startDate: start, endDate: end }) : null,
-        hasGoogle ? google.fetchDailyTimeSeries(clientId,  { startDate: start, endDate: end }) : null,
-        hasMeta   ? meta.fetchMetaTimeSeries(clientId,     { startDate: start, endDate: end }) : null,
+        withTimeout(hasGoogle ? google.fetchAccountSummary(clientId,  { startDate: start, endDate: end }) : null),
+        withTimeout(hasMeta   ? meta.fetchMetaSummary(clientId,       { startDate: start, endDate: end }) : null),
+        withTimeout(hasGoogle ? google.fetchCampaignMetrics(clientId, { startDate: start, endDate: end }) : null),
+        withTimeout(hasMeta   ? meta.fetchMetaCampaigns(clientId,     { startDate: start, endDate: end }) : null),
+        withTimeout(hasGoogle ? google.fetchDailyTimeSeries(clientId, { startDate: start, endDate: end }) : null),
+        withTimeout(hasMeta   ? meta.fetchMetaTimeSeries(clientId,    { startDate: start, endDate: end }) : null),
       ]);
+
+    // Log errores para debugging
+    [gSummary, mSummary, gCampaigns, mCampaigns, gTimeSeries, mTimeSeries].forEach((r, i) => {
+      if (r.status === 'rejected') {
+        console.warn(`Dashboard slot ${i} failed:`, r.reason?.message);
+      }
+    });
 
     const g = gSummary.value  || {};
     const m = mSummary.value  || {};
 
-    // Merge KPIs
     const kpis = {
       total_spend:       (g.spend       || 0) + (m.spend       || 0),
       total_clicks:      (g.clicks      || 0) + (m.clicks      || 0),
@@ -53,13 +69,11 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
     kpis.cpa  = kpis.total_conversions > 0 ? kpis.total_spend / kpis.total_conversions : 0;
     kpis.ctr  = kpis.total_impressions > 0 ? (kpis.total_clicks / kpis.total_impressions) * 100 : 0;
 
-    // Merge campaigns
     const campaigns = [
       ...(gCampaigns.value || []),
       ...(mCampaigns.value || []),
     ].sort((a, b) => b.spend - a.spend);
 
-    // Merge time series by date
     const tsMap = {};
     for (const row of [...(gTimeSeries.value || []), ...(mTimeSeries.value || [])]) {
       if (!tsMap[row.date]) {
@@ -73,11 +87,16 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
     }
     const timeSeries = Object.values(tsMap).sort((a, b) => a.date.localeCompare(b.date));
 
-    res.json({ kpis, campaigns, timeSeries, connections: conns });
+    // Indicar qué plataformas fallaron
+    const errors = {};
+    if (gSummary.status === 'rejected') errors.google = gSummary.reason?.message;
+    if (mSummary.status === 'rejected') errors.meta   = mSummary.reason?.message;
+
+    res.json({ kpis, campaigns, timeSeries, connections: conns, errors });
   } catch (e) { next(e); }
 });
 
-// GET /api/dashboard/clients-summary  (agency overview — all clients)
+// GET /api/dashboard/clients-summary
 router.get('/clients-summary', async (req, res, next) => {
   try {
     const agencyUserId = req.session.userId;
@@ -97,11 +116,15 @@ router.get('/clients-summary', async (req, res, next) => {
       for (const conn of conns) {
         try {
           if (conn.platform === 'google_ads') {
-            const s = await google.fetchAccountSummary(client.id, { startDate: start, endDate: end });
-            spend += s.spend; conversions += s.conversions; revenue += s.revenue;
+            const s = await withTimeout(
+              google.fetchAccountSummary(client.id, { startDate: start, endDate: end }), 6000
+            );
+            if (s) { spend += s.spend; conversions += s.conversions; revenue += s.revenue; }
           } else if (conn.platform === 'meta_ads') {
-            const s = await meta.fetchMetaSummary(client.id, { startDate: start, endDate: end });
-            spend += s.spend; conversions += s.conversions; revenue += s.revenue;
+            const s = await withTimeout(
+              meta.fetchMetaSummary(client.id, { startDate: start, endDate: end }), 6000
+            );
+            if (s) { spend += s.spend; conversions += s.conversions; revenue += s.revenue; }
           }
         } catch (_) {}
       }
