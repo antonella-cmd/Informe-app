@@ -60,12 +60,13 @@ export default function ConnectionsPage() {
 
   useEffect(() => {
     if (searchParams.get('connected') === 'google') setAccounts(ALL_ACCOUNTS);
-    if (searchParams.get('connected') === 'meta') setMetaAccounts(ALL_META_ACCOUNTS);
+    if (searchParams.get('connected') === 'meta')   setMetaAccounts(ALL_META_ACCOUNTS);
   }, [searchParams, clientId]);
 
+  // ── CORREGIDO: no agregar &state manualmente, el backend ya lo incluye ──
   const connectGoogle = async () => {
     const r = await googleAPI.authUrl(clientId);
-    window.location.href = r.data.url + `&state=clientId:${clientId}`;
+    window.location.href = r.data.url; // ← sin + `&state=...`
   };
 
   const connectMeta = async () => {
@@ -80,13 +81,13 @@ export default function ConnectionsPage() {
       const account = ALL_ACCOUNTS.find(a => a.id === selectedAccount);
       await import('../services/api').then(m =>
         m.default.patch(`/clients/${clientId}/connections/google_ads`, {
-          account_id: selectedAccount,
+          account_id:   selectedAccount,
           account_name: account?.name || selectedAccount,
         })
       );
       setAccountSaved(true);
       clientsAPI.get(clientId).then(r => { setClient(r.data); setConns(r.data.connections || []); });
-    } catch(e) { alert('Error al guardar la cuenta'); }
+    } catch (e) { alert('Error al guardar la cuenta'); }
     finally { setSavingAccount(false); }
   };
 
@@ -97,13 +98,13 @@ export default function ConnectionsPage() {
       const account = ALL_META_ACCOUNTS.find(a => a.id === selectedMetaAccount);
       await import('../services/api').then(m =>
         m.default.patch(`/clients/${clientId}/connections/meta_ads`, {
-          account_id: selectedMetaAccount,
+          account_id:   selectedMetaAccount,
           account_name: account?.name || selectedMetaAccount,
         })
       );
       setMetaAccountSaved(true);
       clientsAPI.get(clientId).then(r => { setClient(r.data); setConns(r.data.connections || []); });
-    } catch(e) { alert('Error al guardar la cuenta'); }
+    } catch (e) { alert('Error al guardar la cuenta'); }
     finally { setSavingMetaAccount(false); }
   };
 
@@ -114,13 +115,13 @@ export default function ConnectionsPage() {
     );
     setConns(prev => prev.filter(c => c.platform !== platform));
     if (platform === 'google_ads') { setAccountSaved(false); setAccounts([]); }
-    if (platform === 'meta_ads') { setMetaAccountSaved(false); setMetaAccounts([]); }
+    if (platform === 'meta_ads')   { setMetaAccountSaved(false); setMetaAccounts([]); }
   };
 
   const gConn = conns.find(c => c.platform === 'google_ads');
   const mConn = conns.find(c => c.platform === 'meta_ads');
   const justConnectedGoogle = searchParams.get('connected') === 'google';
-  const justConnectedMeta = searchParams.get('connected') === 'meta';
+  const justConnectedMeta   = searchParams.get('connected') === 'meta';
 
   if (loading) return <div style={{ padding: 40, color: 'var(--muted)' }}>Cargando…</div>;
 
@@ -173,7 +174,9 @@ export default function ConnectionsPage() {
             </>
           ) : (
             <>
-              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>Conecta tu cuenta de Google Ads para ver campañas, palabras clave y métricas de conversión.</p>
+              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                Conecta tu cuenta de Google Ads para ver campañas, palabras clave y métricas de conversión.
+              </p>
               <button onClick={connectGoogle}
                 style={{ width: '100%', padding: '10px', borderRadius: 8, border: 'none', background: '#4285F4', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                 Conectar Google Ads
@@ -222,7 +225,9 @@ export default function ConnectionsPage() {
             </>
           ) : (
             <>
-              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>Conecta tu cuenta de Meta para ver campañas de Facebook e Instagram, audiencias y ROAS.</p>
+              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                Conecta tu cuenta de Meta para ver campañas de Facebook e Instagram, audiencias y ROAS.
+              </p>
               <button onClick={connectMeta}
                 style={{ width: '100%', padding: '10px', borderRadius: 8, border: 'none', background: '#0866FF', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                 Conectar Meta Ads
