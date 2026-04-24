@@ -90,6 +90,8 @@ export default function Layout() {
             Herramientas
           </div>
           <NavItem to="/reports" gold={PTI_GOLD}>📄 Informes</NavItem>
+          <NavItem to="/reports/builder" gold={PTI_GOLD}>🧩 Constructor</NavItem>
+          <NavItem to="/reports/new" gold={PTI_GOLD}>✏️ Editor simple</NavItem>
         </nav>
 
         {/* Footer usuario */}
