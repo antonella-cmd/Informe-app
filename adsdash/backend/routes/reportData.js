@@ -89,7 +89,60 @@ router.get('/:clientId/meta/ads', requireClientAccess, async (req, res, next) =>
     const { start, end, sort = 'roas', order = 'desc', limit = 10 } = req.query;
 
     const conn = await getMetaConn(clientId);
-    if (!conn) return res.json({ ads: [], error: 'Meta Ads no conectado' });
+
+    // Si no hay conexión a Meta API, intentar desde base de datos (datos importados por Excel)
+    if (!conn || !conn.account_id) {
+      const platFilter = `AND (a.platform = 'meta_ads' OR ms.platform = 'meta_ads')`;
+      // Intentar desde campaign_metrics primero
+      try {
+        const { rows } = await pool.query(`
+          SELECT c.name, a.platform, c.name AS campaign_name,
+            SUM(cm.spend)::numeric AS spend, SUM(cm.clicks)::numeric AS clicks,
+            SUM(cm.impressions)::numeric AS impressions,
+            SUM(cm.conversions)::numeric AS conversions,
+            SUM(cm.revenue)::numeric AS revenue,
+            AVG(cm.ctr)::numeric AS ctr, AVG(cm.cpc)::numeric AS cpc,
+            AVG(cm.cpm)::numeric AS cpm,
+            CASE WHEN SUM(cm.spend)>0 THEN SUM(cm.revenue)::numeric/SUM(cm.spend) ELSE 0 END AS roas,
+            CASE WHEN SUM(cm.conversions)>0 THEN SUM(cm.spend)::numeric/SUM(cm.conversions) ELSE 0 END AS cpa,
+            NULL::text AS image_url, 'image' AS creative_type
+          FROM campaign_metrics cm
+          JOIN campaigns c ON c.id = cm.campaign_id
+          JOIN ad_accounts a ON a.id = c.ad_account_id
+          WHERE a.client_id = $1 AND cm.date BETWEEN $2 AND $3
+          GROUP BY c.name, a.platform
+          ORDER BY ${['roas','spend','conversions','ctr','clicks','cpm','reach'].includes(sort)?sort:'roas'} DESC NULLS LAST
+          LIMIT $4
+        `, [clientId, start, end, parseInt(limit)]);
+
+        if (rows.length > 0) {
+          return res.json({ ads: rows.map((r,i)=>({...r,ad_id:`db_${i}`,name:r.name,spend:parseFloat(r.spend||0),clicks:parseFloat(r.clicks||0),impressions:parseFloat(r.impressions||0),conversions:parseFloat(r.conversions||0),revenue:parseFloat(r.revenue||0),ctr:parseFloat(r.ctr||0),cpc:parseFloat(r.cpc||0),cpm:parseFloat(r.cpm||0),roas:parseFloat(r.roas||0),cpa:parseFloat(r.cpa||0),reach:0,frequency:0})), total: rows.length, source: 'database' });
+        }
+
+        // Fallback a metrics_snapshots
+        const { rows: msRows } = await pool.query(`
+          SELECT campaign_name AS name, platform, campaign_name,
+            SUM(spend)::numeric AS spend, SUM(clicks)::numeric AS clicks,
+            SUM(impressions)::numeric AS impressions, SUM(conversions)::numeric AS conversions,
+            SUM(revenue)::numeric AS revenue,
+            CASE WHEN SUM(impressions)>0 THEN (SUM(clicks)::numeric/SUM(impressions))*100 ELSE 0 END AS ctr,
+            CASE WHEN SUM(clicks)>0 THEN SUM(spend)::numeric/SUM(clicks) ELSE 0 END AS cpc,
+            CASE WHEN SUM(impressions)>0 THEN (SUM(spend)::numeric/SUM(impressions))*1000 ELSE 0 END AS cpm,
+            CASE WHEN SUM(spend)>0 THEN SUM(revenue)::numeric/SUM(spend) ELSE 0 END AS roas,
+            CASE WHEN SUM(conversions)>0 THEN SUM(spend)::numeric/SUM(conversions) ELSE 0 END AS cpa,
+            NULL::text AS image_url, 'image' AS creative_type
+          FROM metrics_snapshots
+          WHERE client_id = $1 AND date BETWEEN $2 AND $3 AND campaign_name IS NOT NULL
+          GROUP BY campaign_name, platform
+          ORDER BY roas DESC NULLS LAST
+          LIMIT $4
+        `, [clientId, start, end, parseInt(limit)]);
+
+        return res.json({ ads: msRows.map((r,i)=>({...r,ad_id:`ms_${i}`,name:r.name,spend:parseFloat(r.spend||0),clicks:parseFloat(r.clicks||0),impressions:parseFloat(r.impressions||0),conversions:parseFloat(r.conversions||0),revenue:parseFloat(r.revenue||0),ctr:parseFloat(r.ctr||0),cpc:parseFloat(r.cpc||0),cpm:parseFloat(r.cpm||0),roas:parseFloat(r.roas||0),cpa:parseFloat(r.cpa||0),reach:0,frequency:0})), total: msRows.length, source: 'database' });
+      } catch(dbErr) {
+        return res.json({ ads: [], error: 'Sin conexión a Meta y sin datos importados' });
+      }
+    }
 
     const { access_token, account_id } = conn;
     if (!account_id) return res.json({ ads: [], error: 'Sin account_id de Meta' });
