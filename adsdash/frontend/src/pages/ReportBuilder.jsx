@@ -228,8 +228,8 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
   const prevKpis=prevData?.kpis||{};
   const campaigns=(dashData?.campaigns||[]).filter(c=>platform==='both'||(platform==='google'&&c.platform==='google_ads')||(platform==='meta'&&c.platform==='meta_ads'));
 
-  const selectedMetrics=cfg.metrics||['spend','roas','conversions','ctr'];
-  const selectedCols=cfg.columns||['name','platform','spend','conversions','roas','ctr'];
+  const selectedMetrics=cfg.metrics||['impressions','clicks','ctr','spend','purchases','purchase_value','add_to_cart','checkout_initiated','cost_per_purchase','roas'];
+  const selectedCols=cfg.columns||['name','platform','status','spend','purchases','purchase_value','add_to_cart','checkout_initiated','cost_per_purchase','roas','ctr'];
 
   if(loading) return(
     <div style={{padding:40,textAlign:'center',color:'var(--muted)',fontSize:13}}>
@@ -276,20 +276,33 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
 
   // ── Campaigns Table ───────────────────────────────────────
   if(block.type==='campaigns'){
+    // Filtros configurables
+    const statusFilter=cfg.statusFilter||'all';
+    const filteredCampaigns=campaigns.filter(c=>{
+      if(statusFilter==='active') return ['ENABLED','ACTIVE'].includes(c.status?.toUpperCase());
+      if(statusFilter==='paused') return ['PAUSED','INACTIVE'].includes(c.status?.toUpperCase());
+      if(statusFilter==='with_spend') return Number(c.spend||0)>0;
+      return true;
+    });
+
     const COL_DEFS={
-      name:{label:'Campaña',render:c=><td style={{padding:'9px 12px',fontWeight:500,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</td>},
+      name:{label:'Campaña',render:c=><td style={{padding:'9px 12px',fontWeight:500,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</td>},
       platform:{label:'Plataforma',render:c=><td style={{padding:'9px 12px'}}><span style={{fontSize:10,padding:'2px 7px',borderRadius:4,fontWeight:700,background:c.platform==='google_ads'?'rgba(66,133,244,0.15)':'rgba(127,119,221,0.15)',color:c.platform==='google_ads'?'#378ADD':'#7F77DD'}}>{c.platform==='google_ads'?'Google':'Meta'}</span></td>},
-      status:{label:'Estado',render:c=><td style={{padding:'9px 12px'}}><span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11}}><span style={{width:6,height:6,borderRadius:'50%',background:['ENABLED','ACTIVE'].includes(c.status?.toUpperCase())?'#34C78A':'#FFB547'}}/>{['ENABLED','ACTIVE'].includes(c.status?.toUpperCase())?'Activa':'Pausada'}</span></td>},
+      status:{label:'Estado',render:c=>{const active=['ENABLED','ACTIVE'].includes(c.status?.toUpperCase());return<td style={{padding:'9px 12px'}}><span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11}}><span style={{width:6,height:6,borderRadius:'50%',background:active?'#34C78A':'#FFB547'}}/>{active?'Activa':'Pausada'}</span></td>;}},
       spend:{label:'Inversión',render:c=><td style={{padding:'9px 12px',fontWeight:600}}>{$(c.spend)}</td>},
-      clicks:{label:'Clics',render:c=><td style={{padding:'9px 12px'}}>{N(c.clicks)}</td>},
       impressions:{label:'Impresiones',render:c=><td style={{padding:'9px 12px'}}>{N(c.impressions)}</td>},
-      conversions:{label:'Conv.',render:c=><td style={{padding:'9px 12px'}}>{N(c.conversions)}</td>},
+      clicks:{label:'Clics',render:c=><td style={{padding:'9px 12px'}}>{N(c.clicks)}</td>},
       ctr:{label:'CTR',render:c=><td style={{padding:'9px 12px'}}>{P(c.ctr)}</td>},
-      cpc:{label:'CPC',render:c=><td style={{padding:'9px 12px'}}>{$(c.cpc)}</td>},
-      cpm:{label:'CPM',render:c=><td style={{padding:'9px 12px'}}>{$(c.cpm)}</td>},
+      purchases:{label:'Compras',render:c=><td style={{padding:'9px 12px'}}>{N(c.purchases||c.conversions)}</td>},
+      purchase_value:{label:'Valor compras',render:c=><td style={{padding:'9px 12px'}}>{$(c.purchase_value||c.revenue)}</td>},
+      add_to_cart:{label:'Ag. carrito',render:c=><td style={{padding:'9px 12px'}}>{N(c.add_to_cart)}</td>},
+      checkout_initiated:{label:'Checkout',render:c=><td style={{padding:'9px 12px'}}>{N(c.checkout_initiated)}</td>},
+      cost_per_purchase:{label:'Costo/compra',render:c=><td style={{padding:'9px 12px'}}>{$(c.cost_per_purchase||c.cpa)}</td>},
       roas:{label:'ROAS',render:c=><td style={{padding:'9px 12px',color:c.roas>=4?'#34C78A':c.roas>0?'#E8A020':'var(--muted)',fontWeight:600}}>{R(c.roas)}</td>},
-      revenue:{label:'Revenue',render:c=><td style={{padding:'9px 12px'}}>{$(c.revenue)}</td>},
-      cpa:{label:'CPA',render:c=><td style={{padding:'9px 12px'}}>{$(c.cpa)}</td>},
+      frequency:{label:'Frecuencia',render:c=><td style={{padding:'9px 12px'}}>{Number(c.frequency||0).toFixed(2)}</td>},
+      cpm:{label:'CPM',render:c=><td style={{padding:'9px 12px'}}>{$(c.cpm)}</td>},
+      cpc:{label:'CPC',render:c=><td style={{padding:'9px 12px'}}>{$(c.cpc)}</td>},
+      reach:{label:'Alcance',render:c=><td style={{padding:'9px 12px'}}>{N(c.reach)}</td>},
     };
     return(
       <div style={{overflowX:'auto'}}>
@@ -298,12 +311,12 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
             <tr>{selectedCols.map(k=>{const d=COL_DEFS[k];return d?<th key={k} style={{padding:'8px 12px',textAlign:'left',fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px',color:'var(--muted)',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{d.label}</th>:null;})}</tr>
           </thead>
           <tbody>
-            {campaigns.map((c,i)=>(
+            {filteredCampaigns.map((c,i)=>(
               <tr key={i} style={{borderBottom:'1px solid var(--border)'}}>
                 {selectedCols.map(k=>{const d=COL_DEFS[k];return d?d.render(c):null;})}
               </tr>
             ))}
-            {campaigns.length===0&&<tr><td colSpan={selectedCols.length} style={{padding:30,textAlign:'center',color:'var(--muted)',fontSize:13}}>Sin campañas para este período</td></tr>}
+            {filteredCampaigns.length===0&&<tr><td colSpan={selectedCols.length} style={{padding:30,textAlign:'center',color:'var(--muted)',fontSize:13}}>Sin campañas para este filtro</td></tr>}
           </tbody>
         </table>
       </div>
@@ -656,19 +669,35 @@ function BlockConfigPanel({block,onChange,onClose}){
       {block.type==='campaigns'&&(
         <>
           <div style={{marginBottom:14}}>
-            <div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>COLUMNAS DE LA TABLA</div>
-            {allCols.map(k=>(
-              <label key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:7,cursor:'pointer'}}>
-                <input type="checkbox" checked={selectedC.includes(k)} onChange={()=>upd('columns',selectedC.includes(k)?selectedC.filter(x=>x!==k):[...selectedC,k])}/>
-                <span style={{fontSize:12}}>{METRICS[k]?.label||k}</span>
-              </label>
-            ))}
+            <div style={{fontSize:11,color:'var(--muted)',marginBottom:5}}>FILTRAR CAMPAÑAS</div>
+            <select value={cfg.statusFilter||'all'} onChange={e=>upd('statusFilter',e.target.value)} style={{width:'100%',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'7px 10px',color:'var(--text)',fontSize:13,outline:'none'}}>
+              <option value="all">Todas las campañas</option>
+              <option value="active">Solo activas</option>
+              <option value="paused">Solo pausadas</option>
+              <option value="with_spend">Solo con inversión</option>
+            </select>
           </div>
           <div style={{marginBottom:14}}>
             <div style={{fontSize:11,color:'var(--muted)',marginBottom:5}}>PLATAFORMA</div>
             <select value={cfg.platform||'both'} onChange={e=>upd('platform',e.target.value)} style={{width:'100%',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'7px 10px',color:'var(--text)',fontSize:13,outline:'none'}}>
               <option value="both">Todas</option><option value="google">Solo Google</option><option value="meta">Solo Meta</option>
             </select>
+          </div>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>COLUMNAS DE LA TABLA</div>
+            {[
+              ['name','Campaña'],['platform','Plataforma'],['status','Estado'],
+              ['spend','Inversión'],['impressions','Impresiones'],['clicks','Clics'],
+              ['ctr','CTR'],['purchases','Compras'],['purchase_value','Valor de compras'],
+              ['add_to_cart','Ag. al carrito'],['checkout_initiated','Checkout iniciado'],
+              ['cost_per_purchase','Costo por compra'],['roas','ROAS'],
+              ['frequency','Frecuencia'],['cpm','CPM'],['cpc','CPC'],['reach','Alcance'],
+            ].map(([k,l])=>(
+              <label key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:7,cursor:'pointer'}}>
+                <input type="checkbox" checked={selectedC.includes(k)} onChange={()=>upd('columns',selectedC.includes(k)?selectedC.filter(x=>x!==k):[...selectedC,k])}/>
+                <span style={{fontSize:12}}>{l}</span>
+              </label>
+            ))}
           </div>
         </>
       )}
