@@ -160,9 +160,22 @@ function CreativeModal({ad,onClose}){
 
         {/* Métricas */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
-          {[['Inversión',$(ad.spend)],['ROAS',R(ad.roas)],['Conversiones',N(ad.conversions)],
-            ['Clics',N(ad.clicks)],['CTR',P(ad.ctr)],['CPC',$(ad.cpc)],
-            ['CPM',$(ad.cpm)],['Alcance',N(ad.reach)],['Frecuencia',Number(ad.frequency||0).toFixed(2)]
+          {[
+            ['Inversión',$(ad.spend)],
+            ['ROAS',R(ad.roas)],
+            ['Compras',N(ad.purchases||ad.conversions)],
+            ['Valor compras',$(ad.purchase_value||ad.revenue)],
+            ['Ag. carrito',N(ad.add_to_cart)],
+            ['Checkout',N(ad.checkout_initiated)],
+            ['Costo/compra',$(ad.cost_per_purchase||ad.cpa)],
+            ['CTR',P(ad.ctr)],
+            ['Clics',N(ad.clicks)],
+            ['Impresiones',N(ad.impressions)],
+            ['Frecuencia',Number(ad.frequency||0).toFixed(2)],
+            ['Alcance',N(ad.reach)],
+            ['CPM',$(ad.cpm)],
+            ['Seg. IG',N(ad.ig_follows)],
+            ['CPC',$(ad.cpc)],
           ].map(([l,v])=>(
             <div key={l} style={{background:'var(--bg)',borderRadius:7,padding:'8px 10px',border:'1px solid var(--border)'}}>
               <div style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:3}}>{l}</div>
@@ -322,20 +335,69 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
   // ── Meta Ads con creatividades ────────────────────────────
   if(block.type==='meta_ads'){
     const ads=(bdata?.ads||[]);
+    const viewMode=cfg.viewMode||'table';
+    const thumbSize=cfg.thumbSize||'medium';
+    const visibleCols=cfg.visibleCols||['impressions','clicks','ctr','spend','purchases','purchase_value','add_to_cart','checkout_initiated','frequency','cost_per_purchase','roas'];
+    const thumbDims={small:{w:52,h:36},medium:{w:90,h:64},large:{w:140,h:100}};
+    const td=thumbDims[thumbSize]||thumbDims.medium;
+    const ALL_AD_COLS=[
+      {key:'impressions',       label:'Impresiones',         render:ad=>N(ad.impressions)},
+      {key:'clicks',            label:'Clics',               render:ad=>N(ad.clicks)},
+      {key:'ctr',               label:'CTR',                 render:ad=>P(ad.ctr)},
+      {key:'spend',             label:'Inversión',           render:ad=>$(ad.spend)},
+      {key:'purchases',         label:'Compras',             render:ad=>N(ad.purchases)},
+      {key:'purchase_value',    label:'Valor de compras',    render:ad=>$(ad.purchase_value)},
+      {key:'add_to_cart',       label:'Ag. al carrito',      render:ad=>N(ad.add_to_cart)},
+      {key:'checkout_initiated',label:'Checkout iniciado',   render:ad=>N(ad.checkout_initiated)},
+      {key:'frequency',         label:'Frecuencia',          render:ad=>Number(ad.frequency||0).toFixed(2)},
+      {key:'cost_per_purchase', label:'Costo por compra',    render:ad=>$(ad.cost_per_purchase)},
+      {key:'roas',              label:'ROAS',                render:ad=><span style={{color:ad.roas>=4?'#34C78A':ad.roas>0?'#E8A020':'var(--muted)',fontWeight:600}}>{R(ad.roas)}</span>},
+      {key:'ig_follows',        label:'Seguidores IG',       render:ad=>N(ad.ig_follows)},
+      {key:'cpm',               label:'CPM',                 render:ad=>$(ad.cpm)},
+      {key:'reach',             label:'Alcance',             render:ad=>N(ad.reach)},
+      {key:'cpc',               label:'CPC',                 render:ad=>$(ad.cpc)},
+    ];
+    const cols=ALL_AD_COLS.filter(c=>visibleCols.includes(c.key));
     if(!ads.length) return(
       <div style={{padding:40,textAlign:'center',color:'var(--muted)',fontSize:13}}>
         No hay anuncios de Meta para este período.<br/>
         <span style={{fontSize:11}}>Conectá Meta Ads desde la sección Conexiones.</span>
       </div>
     );
+    if(viewMode==='grid') return(
+      <>
+        <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fill,minmax(${thumbSize==='large'?220:thumbSize==='medium'?180:150}px,1fr))`,gap:12}}>
+          {ads.map((ad,i)=>(
+            <div key={ad.ad_id||i} onClick={()=>setSelectedAd(ad)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',cursor:'pointer'}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor='#E8A020'}
+              onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
+              <div style={{width:'100%',aspectRatio:'1/1',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',position:'relative'}}>
+                {ad.image_url?(<img src={ad.image_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>):(<span style={{fontSize:32,opacity:0.3}}>{ad.creative_type==='video'?'▶':'🖼'}</span>)}
+                {ad.creative_type==='video'&&<div style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,0.6)',borderRadius:4,padding:'2px 6px',fontSize:10,color:'#fff'}}>▶ Video</div>}
+                <div style={{position:'absolute',top:6,left:6,background:'rgba(0,0,0,0.6)',borderRadius:4,padding:'2px 6px',fontSize:10,color:'#fff',fontWeight:700}}>#{i+1}</div>
+              </div>
+              <div style={{padding:'10px 12px'}}>
+                <div style={{fontSize:12,fontWeight:600,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ad.name}</div>
+                <div style={{fontSize:10,color:'var(--muted)',marginBottom:8,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ad.campaign_name}</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+                  {cols.slice(0,4).map(c=>(<div key={c.key} style={{background:'var(--surface)',borderRadius:5,padding:'5px 7px'}}><div style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',marginBottom:1}}>{c.label}</div><div style={{fontSize:12,fontWeight:600}}>{c.render(ad)}</div></div>))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {selectedAd&&<CreativeModal ad={selectedAd} onClose={()=>setSelectedAd(null)}/>}
+      </>
+    );
     return(
       <>
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
-              <tr>{['#','Creatividad','Anuncio','Campaña','Inversión','ROAS','Conv.','CTR','CPM','Alcance'].map(h=>(
-                <th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px',color:'var(--muted)',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>
-              ))}</tr>
+              <tr>
+                {['#','Creatividad','Anuncio','Campaña'].map(h=><th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px',color:'var(--muted)',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>)}
+                {cols.map(c=><th key={c.key} style={{padding:'8px 12px',textAlign:'left',fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px',color:'var(--muted)',borderBottom:'1px solid var(--border)',whiteSpace:'nowrap'}}>{c.label}</th>)}
+              </tr>
             </thead>
             <tbody>
               {ads.map((ad,i)=>(
@@ -345,22 +407,14 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
                   onClick={()=>setSelectedAd(ad)}>
                   <td style={{padding:'9px 12px',color:'var(--muted)',fontWeight:600,fontSize:11}}>{i+1}</td>
                   <td style={{padding:'9px 12px'}}>
-                    <div style={{width:52,height:36,borderRadius:5,overflow:'hidden',background:'#111',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      {ad.image_url?(
-                        <img src={ad.image_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
-                      ):(
-                        <span style={{fontSize:14,opacity:0.4}}>{ad.creative_type==='video'?'▶':'🖼'}</span>
-                      )}
+                    <div style={{width:td.w,height:td.h,borderRadius:6,overflow:'hidden',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',flexShrink:0}}>
+                      {ad.image_url?(<img src={ad.image_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>):(<span style={{fontSize:thumbSize==='large'?28:thumbSize==='medium'?20:14,opacity:0.4}}>{ad.creative_type==='video'?'▶':'🖼'}</span>)}
+                      {ad.creative_type==='video'&&<div style={{position:'absolute',bottom:2,right:2,background:'rgba(0,0,0,0.7)',borderRadius:3,padding:'1px 4px',fontSize:9,color:'#fff'}}>▶</div>}
                     </div>
                   </td>
-                  <td style={{padding:'9px 12px',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:500}}>{ad.name}</td>
-                  <td style={{padding:'9px 12px',maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--muted)',fontSize:11}}>{ad.campaign_name}</td>
-                  <td style={{padding:'9px 12px',fontWeight:600}}>{$(ad.spend)}</td>
-                  <td style={{padding:'9px 12px',color:ad.roas>=4?'#34C78A':ad.roas>0?'#E8A020':'var(--muted)',fontWeight:600}}>{R(ad.roas)}</td>
-                  <td style={{padding:'9px 12px'}}>{N(ad.conversions)}</td>
-                  <td style={{padding:'9px 12px'}}>{P(ad.ctr)}</td>
-                  <td style={{padding:'9px 12px'}}>{$(ad.cpm)}</td>
-                  <td style={{padding:'9px 12px'}}>{N(ad.reach)}</td>
+                  <td style={{padding:'9px 12px',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:500}}>{ad.name}</td>
+                  <td style={{padding:'9px 12px',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--muted)',fontSize:11}}>{ad.campaign_name}</td>
+                  {cols.map(c=><td key={c.key} style={{padding:'9px 12px'}}>{c.render(ad)}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -662,6 +716,51 @@ function BlockConfigPanel({block,onChange,onClose}){
       {/* Meta Ads options */}
       {block.type==='meta_ads'&&(
         <>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,color:'var(--muted)',marginBottom:5}}>VISTA</div>
+            <div style={{display:'flex',gap:6}}>
+              {[['table','Tabla'],['grid','Grilla']].map(([v,l])=>(
+                <button key={v} onClick={()=>upd('viewMode',v)} style={{flex:1,padding:'7px',borderRadius:6,border:'1px solid var(--border)',background:(cfg.viewMode||'table')===v?'#E8A020':'var(--bg)',color:(cfg.viewMode||'table')===v?'#fff':'var(--text)',cursor:'pointer',fontSize:12}}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,color:'var(--muted)',marginBottom:5}}>TAMAÑO DE IMAGEN</div>
+            <div style={{display:'flex',gap:6}}>
+              {[['small','Chica'],['medium','Mediana'],['large','Grande']].map(([v,l])=>(
+                <button key={v} onClick={()=>upd('thumbSize',v)} style={{flex:1,padding:'6px 2px',borderRadius:6,border:'1px solid var(--border)',background:(cfg.thumbSize||'medium')===v?'#E8A020':'var(--bg)',color:(cfg.thumbSize||'medium')===v?'#fff':'var(--text)',cursor:'pointer',fontSize:11}}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>COLUMNAS A MOSTRAR</div>
+            {[
+              ['impressions','Impresiones'],
+              ['clicks','Clics'],
+              ['ctr','CTR'],
+              ['spend','Inversión / Importe gastado'],
+              ['purchases','Compras'],
+              ['purchase_value','Valor de compras'],
+              ['add_to_cart','Agregados al carrito'],
+              ['checkout_initiated','Pagos iniciados / Checkout'],
+              ['frequency','Frecuencia'],
+              ['cost_per_purchase','Costo por compra'],
+              ['roas','ROAS'],
+              ['ig_follows','Seguidores Instagram'],
+              ['cpm','CPM'],
+              ['reach','Alcance'],
+              ['cpc','CPC'],
+            ].map(([k,l])=>{
+              const def=['impressions','clicks','ctr','spend','purchases','purchase_value','add_to_cart','checkout_initiated','frequency','cost_per_purchase','roas'];
+              const cur=cfg.visibleCols||def;
+              return(
+                <label key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:7,cursor:'pointer'}}>
+                  <input type="checkbox" checked={cur.includes(k)} onChange={()=>upd('visibleCols',cur.includes(k)?cur.filter(x=>x!==k):[...cur,k])}/>
+                  <span style={{fontSize:12}}>{l}</span>
+                </label>
+              );
+            })}
+          </div>
           <div style={{marginBottom:14}}>
             <div style={{fontSize:11,color:'var(--muted)',marginBottom:5}}>ORDENAR POR</div>
             <select value={cfg.sort||'roas'} onChange={e=>upd('sort',e.target.value)} style={{width:'100%',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'7px 10px',color:'var(--text)',fontSize:13,outline:'none'}}>
