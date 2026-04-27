@@ -385,13 +385,13 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
     );
     if(viewMode==='grid') return(
       <>
-        <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fill,minmax(${thumbSize==='large'?220:thumbSize==='medium'?180:150}px,1fr))`,gap:12}}>
+        <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fill,minmax(${thumbSize==='large'?260:thumbSize==='medium'?200:160}px,1fr))`,gap:16}}>
           {ads.map((ad,i)=>(
             <div key={ad.ad_id||i} onClick={()=>setSelectedAd(ad)} style={{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',cursor:'pointer'}}
               onMouseEnter={e=>e.currentTarget.style.borderColor='#E8A020'}
               onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
-              <div style={{width:'100%',aspectRatio:'1/1',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',position:'relative'}}>
-                {ad.image_url?(<img src={ad.image_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>):(<span style={{fontSize:32,opacity:0.3}}>{ad.creative_type==='video'?'▶':'🖼'}</span>)}
+              <div style={{width:'100%',aspectRatio:'4/3',background:'#0a0a0a',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',position:'relative'}}>
+                {ad.image_url?(<img src={ad.image_url} alt="" style={{width:'100%',height:'100%',objectFit:'contain'}} onError={e=>{e.target.style.display='none';}}/>):(<span style={{fontSize:32,opacity:0.3}}>{ad.creative_type==='video'?'▶':'🖼'}</span>)}
                 {ad.creative_type==='video'&&<div style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,0.6)',borderRadius:4,padding:'2px 6px',fontSize:10,color:'#fff'}}>▶ Video</div>}
                 <div style={{position:'absolute',top:6,left:6,background:'rgba(0,0,0,0.6)',borderRadius:4,padding:'2px 6px',fontSize:10,color:'#fff',fontWeight:700}}>#{i+1}</div>
               </div>
@@ -427,7 +427,7 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
                   <td style={{padding:'9px 12px',color:'var(--muted)',fontWeight:600,fontSize:11}}>{i+1}</td>
                   <td style={{padding:'9px 12px'}}>
                     <div style={{width:td.w,height:td.h,borderRadius:6,overflow:'hidden',background:'#111',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',flexShrink:0}}>
-                      {ad.image_url?(<img src={ad.image_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>):(<span style={{fontSize:thumbSize==='large'?28:thumbSize==='medium'?20:14,opacity:0.4}}>{ad.creative_type==='video'?'▶':'🖼'}</span>)}
+                      {ad.image_url?(<img src={ad.image_url} alt="" style={{width:'100%',height:'100%',objectFit:'contain'}} onError={e=>{e.target.style.display='none';}}/>):(<span style={{fontSize:thumbSize==='large'?28:thumbSize==='medium'?20:14,opacity:0.4}}>{ad.creative_type==='video'?'▶':'🖼'}</span>)}
                       {ad.creative_type==='video'&&<div style={{position:'absolute',bottom:2,right:2,background:'rgba(0,0,0,0.7)',borderRadius:3,padding:'1px 4px',fontSize:9,color:'#fff'}}>▶</div>}
                     </div>
                   </td>
