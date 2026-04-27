@@ -57,17 +57,35 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
     const m = mSummary.value || {};
 
     const kpis = {
-      total_spend:       (g.spend       || 0) + (m.spend       || 0),
-      total_clicks:      (g.clicks      || 0) + (m.clicks      || 0),
-      total_impressions: (g.impressions || 0) + (m.impressions || 0),
-      total_conversions: (g.conversions || 0) + (m.conversions || 0),
-      total_revenue:     (g.revenue     || 0) + (m.revenue     || 0),
+      // Totales combinados
+      total_spend:        (g.spend       || 0) + (m.spend       || 0),
+      total_clicks:       (g.clicks      || 0) + (m.clicks      || 0),
+      total_impressions:  (g.impressions || 0) + (m.impressions || 0),
+      total_conversions:  (g.conversions || 0) + (m.conversions || 0),
+      total_revenue:      (g.revenue     || 0) + (m.revenue     || 0),
+      // Métricas e-commerce de Meta
+      purchases:          m.purchases          || 0,
+      purchase_value:     m.purchase_value     || m.revenue || 0,
+      add_to_cart:        m.add_to_cart        || 0,
+      checkout_initiated: m.checkout_initiated || 0,
+      ig_follows:         m.ig_follows         || 0,
+      frequency:          m.frequency          || 0,
+      reach:              (g.reach || 0) + (m.reach || 0),
+      // Desglose por plataforma
+      spend:              (g.spend || 0) + (m.spend || 0),
+      clicks:             (g.clicks || 0) + (m.clicks || 0),
+      impressions:        (g.impressions || 0) + (m.impressions || 0),
+      conversions:        (g.conversions || 0) + (m.conversions || 0),
+      revenue:            (g.revenue || 0) + (m.revenue || 0),
       google: g,
       meta:   m,
     };
-    kpis.roas = kpis.total_spend > 0 ? kpis.total_revenue / kpis.total_spend : 0;
-    kpis.cpa  = kpis.total_conversions > 0 ? kpis.total_spend / kpis.total_conversions : 0;
-    kpis.ctr  = kpis.total_impressions > 0 ? (kpis.total_clicks / kpis.total_impressions) * 100 : 0;
+    kpis.roas              = kpis.total_spend > 0 ? kpis.total_revenue / kpis.total_spend : 0;
+    kpis.cpa               = kpis.total_conversions > 0 ? kpis.total_spend / kpis.total_conversions : 0;
+    kpis.ctr               = kpis.total_impressions > 0 ? (kpis.total_clicks / kpis.total_impressions) * 100 : 0;
+    kpis.cost_per_purchase = kpis.purchases > 0 ? kpis.total_spend / kpis.purchases : 0;
+    kpis.cpm               = kpis.total_impressions > 0 ? (kpis.total_spend / kpis.total_impressions) * 1000 : 0;
+    kpis.cpc               = kpis.total_clicks > 0 ? kpis.total_spend / kpis.total_clicks : 0;
 
     const campaigns = [
       ...(gCampaigns.value || []),
@@ -77,13 +95,21 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
     const tsMap = {};
     for (const row of [...(gTimeSeries.value || []), ...(mTimeSeries.value || [])]) {
       if (!tsMap[row.date]) {
-        tsMap[row.date] = { date: row.date, spend: 0, clicks: 0, impressions: 0, conversions: 0, revenue: 0 };
+        tsMap[row.date] = {
+          date: row.date, spend: 0, clicks: 0, impressions: 0,
+          conversions: 0, revenue: 0, purchases: 0, purchase_value: 0,
+          add_to_cart: 0, checkout_initiated: 0,
+        };
       }
-      tsMap[row.date].spend       += row.spend;
-      tsMap[row.date].clicks      += row.clicks;
-      tsMap[row.date].impressions += row.impressions;
-      tsMap[row.date].conversions += row.conversions;
-      tsMap[row.date].revenue     += row.revenue;
+      tsMap[row.date].spend              += row.spend       || 0;
+      tsMap[row.date].clicks             += row.clicks      || 0;
+      tsMap[row.date].impressions        += row.impressions || 0;
+      tsMap[row.date].conversions        += row.conversions || 0;
+      tsMap[row.date].revenue            += row.revenue     || 0;
+      tsMap[row.date].purchases          += row.purchases   || 0;
+      tsMap[row.date].purchase_value     += row.purchase_value || 0;
+      tsMap[row.date].add_to_cart        += row.add_to_cart || 0;
+      tsMap[row.date].checkout_initiated += row.checkout_initiated || 0;
     }
     const timeSeries = Object.values(tsMap).sort((a, b) => a.date.localeCompare(b.date));
 
