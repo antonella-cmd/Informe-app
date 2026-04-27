@@ -60,18 +60,24 @@ function compRange(type,s,e,cs,ce){
 
 // ── ALL available metrics with formatter ────────────────────
 const METRICS = {
-  spend:       {label:'Inversión',         fmt:$,   invert:false},
-  roas:        {label:'ROAS',              fmt:R,   invert:false},
-  conversions: {label:'Conversiones',      fmt:N,   invert:false},
-  ctr:         {label:'CTR',              fmt:P,   invert:false},
-  cpa:         {label:'CPA',              fmt:$,   invert:true},
-  clicks:      {label:'Clics',            fmt:N,   invert:false},
-  impressions: {label:'Impresiones',      fmt:N,   invert:false},
-  revenue:     {label:'Revenue',          fmt:$,   invert:false},
-  cpc:         {label:'CPC',             fmt:$,   invert:true},
-  cpm:         {label:'CPM',             fmt:$,   invert:true},
-  reach:       {label:'Alcance',          fmt:N,   invert:false},
-  frequency:   {label:'Frecuencia',       fmt:n=>Number(n||0).toFixed(2),invert:true},
+  impressions:        {label:'Impresiones',          fmt:N,   invert:false},
+  clicks:             {label:'Clics',                fmt:N,   invert:false},
+  ctr:                {label:'CTR',                  fmt:P,   invert:false},
+  spend:              {label:'Inversión / Importe gastado', fmt:$, invert:false},
+  purchases:          {label:'Compras',              fmt:N,   invert:false},
+  purchase_value:     {label:'Valor de compras',     fmt:$,   invert:false},
+  add_to_cart:        {label:'Agregados al carrito', fmt:N,   invert:false},
+  checkout_initiated: {label:'Pagos iniciados',      fmt:N,   invert:false},
+  frequency:          {label:'Frecuencia',           fmt:n=>Number(n||0).toFixed(2), invert:true},
+  cost_per_purchase:  {label:'Costo por compra',     fmt:$,   invert:true},
+  roas:               {label:'ROAS',                 fmt:R,   invert:false},
+  ig_follows:         {label:'Seguidores Instagram', fmt:N,   invert:false},
+  conversions:        {label:'Conversiones',         fmt:N,   invert:false},
+  revenue:            {label:'Revenue',              fmt:$,   invert:false},
+  cpa:                {label:'CPA',                  fmt:$,   invert:true},
+  reach:              {label:'Alcance',              fmt:N,   invert:false},
+  cpc:                {label:'CPC',                  fmt:$,   invert:true},
+  cpm:                {label:'CPM',                  fmt:$,   invert:true},
 };
 
 // Mapeo bidireccional: clave de métrica → clave en kpis del overview
@@ -602,33 +608,7 @@ function BlockRenderer({block,clientId,rangeStart,rangeEnd,compStart,compEnd,use
 
   // ── AI Summary ────────────────────────────────────────────
   if(block.type==='ai_summary'){
-    const [aiData,setAiData]=useState(null);
-    const [aiLoading,setAiLoading]=useState(false);
-    const generate=async()=>{
-      setAiLoading(true);
-      try{
-        const r=await api.post(`/ai/${clientId}/insights`,{start_date:rangeStart,end_date:rangeEnd});
-        setAiData(r.data);
-      }catch(e){console.error(e);}finally{setAiLoading(false);}
-    };
-    if(!aiData) return(
-      <div style={{textAlign:'center',padding:'24px 0'}}>
-        <button onClick={generate} disabled={aiLoading} style={{padding:'10px 24px',borderRadius:8,border:'none',background:'#E8A020',color:'#fff',cursor:'pointer',fontSize:14,fontWeight:600,opacity:aiLoading?0.6:1}}>
-          {aiLoading?'Generando…':'🤖 Generar análisis con IA'}
-        </button>
-      </div>
-    );
-    return(
-      <div>
-        <div style={{background:'rgba(232,160,32,0.08)',border:'1px solid rgba(232,160,32,0.3)',borderRadius:10,padding:'14px 18px',marginBottom:16,fontSize:14,lineHeight:1.7}}>{aiData.summary}</div>
-        {aiData.top_insights?.map((ins,i)=>(
-          <div key={i} style={{marginBottom:10,paddingLeft:14,borderLeft:`3px solid ${ins.impact==='high'?'#E8A020':ins.impact==='medium'?'#378ADD':'#95A5A6'}`}}>
-            <div style={{fontWeight:600,fontSize:13,marginBottom:2}}>{ins.title}</div>
-            <div style={{fontSize:12,color:'var(--muted)',lineHeight:1.5}}>{ins.description}</div>
-          </div>
-        ))}
-      </div>
-    );
+    return <AIBlock clientId={clientId} rangeStart={rangeStart} rangeEnd={rangeEnd}/>;
   }
 
   return <div style={{padding:20,color:'var(--muted)',fontSize:13}}>Bloque no disponible aún</div>;
@@ -858,6 +838,9 @@ export default function ReportBuilder(){
   const [reportName,setReportName]=useState('');
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
+  const [shareUrl,setShareUrl]=useState('');
+  const [sharing,setSharing]=useState(false);
+  const [savedReportId,setSavedReportId]=useState(null);
 
   const [catalogOpen,setCatalogOpen]=useState(false);
 
@@ -916,12 +899,28 @@ export default function ReportBuilder(){
     setSaving(true);
     try{
       const {s,e}=getRange();
-      await reportsAPI.create({client_id:clientId,name:reportName,config:{
+      const res=await reportsAPI.create({client_id:clientId,name:reportName,config:{
         start_date:s,end_date:e,preset,comp_type:compType,
         blocks:blocks.map(b=>({type:b.type,label:b.label,config:b.config})),
       }});
+      setSavedReportId(res.data?.id||res.data?.report?.id);
       setSaved(true);setTimeout(()=>setSaved(false),3000);
     }catch(e){console.error(e);}finally{setSaving(false);}
+  };
+
+  const handleShare=async()=>{
+    if(!savedReportId){alert('Primero guardá el informe');return;}
+    setSharing(true);
+    try{
+      const res=await reportsAPI.share(savedReportId);
+      setShareUrl(res.data.share_url||res.data.url||'');
+    }catch(e){console.error(e);}finally{setSharing(false);}
+  };
+
+  const copyShareUrl=()=>{
+    if(!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    alert('Link copiado al portapapeles');
   };
 
   const handlePrint=()=>{
@@ -1034,7 +1033,7 @@ export default function ReportBuilder(){
         <div style={{padding:14,borderTop:'1px solid var(--border)'}}>
           <input type="text" placeholder="Nombre del informe…" value={reportName} onChange={e=>setReportName(e.target.value)}
             style={{width:'100%',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:7,padding:'7px 10px',color:'var(--text)',fontSize:12,outline:'none',marginBottom:8}}/>
-          <div style={{display:'flex',gap:6}}>
+          <div style={{display:'flex',gap:6,marginBottom:6}}>
             <button onClick={handleSave} disabled={saving||!generated||!reportName.trim()} style={{flex:1,padding:'8px',borderRadius:7,border:'1px solid var(--border)',background:'var(--bg)',color:'var(--text)',cursor:'pointer',fontSize:11,opacity:(!generated||!reportName.trim())?0.4:1}}>
               {saved?'✓ Guardado':saving?'…':'💾 Guardar'}
             </button>
@@ -1042,6 +1041,18 @@ export default function ReportBuilder(){
               ⬇ PDF
             </button>
           </div>
+          <button onClick={handleShare} disabled={sharing||!savedReportId} style={{width:'100%',padding:'8px',borderRadius:7,border:'1px solid rgba(55,138,221,0.4)',background:'rgba(55,138,221,0.08)',color:'#378ADD',cursor:savedReportId?'pointer':'not-allowed',fontSize:11,opacity:savedReportId?1:0.5,marginBottom:shareUrl?6:0}}>
+            {sharing?'Generando link…':'🔗 Compartir con link'}
+          </button>
+          {shareUrl&&(
+            <div style={{background:'rgba(52,199,138,0.08)',border:'1px solid rgba(52,199,138,0.3)',borderRadius:7,padding:'8px 10px',marginTop:4}}>
+              <div style={{fontSize:10,color:'#34C78A',marginBottom:4,fontWeight:600}}>✓ Link generado — válido 30 días</div>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <div style={{flex:1,fontSize:10,color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{shareUrl}</div>
+                <button onClick={copyShareUrl} style={{flexShrink:0,padding:'3px 8px',borderRadius:5,border:'1px solid var(--border)',background:'var(--bg)',color:'var(--text)',cursor:'pointer',fontSize:10}}>Copiar</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
