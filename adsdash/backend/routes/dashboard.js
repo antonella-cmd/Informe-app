@@ -1,5 +1,6 @@
 // ============================================================
-// routes/dashboard.js — con timeout para evitar carga lenta
+// routes/dashboard.js
+// FIX: errores de Meta se reportan claramente al frontend
 // ============================================================
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
@@ -11,13 +12,12 @@ import { pool }    from '../db.js';
 const router = Router();
 router.use(requireAuth);
 
-// Wrapper con timeout — si una plataforma tarda más de N ms, devuelve null
-function withTimeout(promise, ms = 8000) {
+function withTimeout(promise, ms = 12000) {
   if (!promise) return Promise.resolve(null);
   return Promise.race([
     promise,
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
+      setTimeout(() => reject(new Error(`Timeout de ${ms/1000}s esperando la API`)), ms)
     ),
   ]);
 }
@@ -28,14 +28,13 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
     const { clientId, start, end } = req.query;
 
     const { rows: conns } = await pool.query(
-      `SELECT platform, account_id FROM platform_connections WHERE client_id = $1`,
+      `SELECT platform, account_id, account_name FROM platform_connections WHERE client_id = $1`,
       [clientId]
     );
 
     const hasGoogle = conns.find(c => c.platform === 'google_ads');
     const hasMeta   = conns.find(c => c.platform === 'meta_ads');
 
-    // Timeout de 8 segundos por plataforma — si Google tarda, no bloquea Meta
     const [gSummary, mSummary, gCampaigns, mCampaigns, gTimeSeries, mTimeSeries] =
       await Promise.allSettled([
         withTimeout(hasGoogle ? google.fetchAccountSummary(clientId,  { startDate: start, endDate: end }) : null),
@@ -46,15 +45,16 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
         withTimeout(hasMeta   ? meta.fetchMetaTimeSeries(clientId,    { startDate: start, endDate: end }) : null),
       ]);
 
-    // Log errores para debugging
+    // Log completo de errores en el servidor
+    const slotNames = ['gSummary','mSummary','gCampaigns','mCampaigns','gTimeSeries','mTimeSeries'];
     [gSummary, mSummary, gCampaigns, mCampaigns, gTimeSeries, mTimeSeries].forEach((r, i) => {
       if (r.status === 'rejected') {
-        console.warn(`Dashboard slot ${i} failed:`, r.reason?.message);
+        console.error(`[Dashboard] ${slotNames[i]} falló:`, r.reason?.message);
       }
     });
 
-    const g = gSummary.value  || {};
-    const m = mSummary.value  || {};
+    const g = gSummary.value || {};
+    const m = mSummary.value || {};
 
     const kpis = {
       total_spend:       (g.spend       || 0) + (m.spend       || 0),
@@ -87,7 +87,7 @@ router.get('/overview', requireClientAccess, async (req, res, next) => {
     }
     const timeSeries = Object.values(tsMap).sort((a, b) => a.date.localeCompare(b.date));
 
-    // Indicar qué plataformas fallaron
+    // Errores detallados para el frontend
     const errors = {};
     if (gSummary.status === 'rejected') errors.google = gSummary.reason?.message;
     if (mSummary.status === 'rejected') errors.meta   = mSummary.reason?.message;
@@ -116,21 +116,16 @@ router.get('/clients-summary', async (req, res, next) => {
       for (const conn of conns) {
         try {
           if (conn.platform === 'google_ads') {
-            const s = await withTimeout(
-              google.fetchAccountSummary(client.id, { startDate: start, endDate: end }), 6000
-            );
+            const s = await withTimeout(google.fetchAccountSummary(client.id, { startDate: start, endDate: end }), 6000);
             if (s) { spend += s.spend; conversions += s.conversions; revenue += s.revenue; }
           } else if (conn.platform === 'meta_ads') {
-            const s = await withTimeout(
-              meta.fetchMetaSummary(client.id, { startDate: start, endDate: end }), 6000
-            );
+            const s = await withTimeout(meta.fetchMetaSummary(client.id, { startDate: start, endDate: end }), 6000);
             if (s) { spend += s.spend; conversions += s.conversions; revenue += s.revenue; }
           }
         } catch (_) {}
       }
       return {
-        ...client,
-        spend, conversions, revenue,
+        ...client, spend, conversions, revenue,
         roas: spend > 0 ? revenue / spend : 0,
         platforms: conns.map(c => c.platform),
       };
