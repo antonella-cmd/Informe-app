@@ -8,6 +8,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireClientAccess } from '../middleware/clientAccess.js';
 import { pool } from '../db.js';
 import fetch from 'node-fetch';
+// Importar la función que ya tiene auto-detect de account_id
+import { listAdAccounts } from '../services/metaAds.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -15,13 +17,42 @@ router.use(requireAuth);
 const GRAPH = 'https://graph.facebook.com/v20.0';
 
 // ── Helpers ─────────────────────────────────────────────────
+// Auto-detectar account_id si falta
+async function autoDetectAccountId(token) {
+  try {
+    const url = `${GRAPH}/me/adaccounts?` + new URLSearchParams({
+      fields: 'id,name', access_token: token, limit: 1,
+    });
+    const res = await fetch(url);
+    const data = await res.json();
+    return data.data?.[0] || null;
+  } catch (_) { return null; }
+}
+
 async function getMetaConn(clientId) {
   const { rows } = await pool.query(
-    `SELECT access_token, account_id FROM platform_connections
+    `SELECT access_token, account_id, account_name FROM platform_connections
      WHERE client_id=$1 AND platform='meta_ads'`,
     [clientId]
   );
-  return rows[0] || null;
+  if (!rows.length) return null;
+  const conn = rows[0];
+
+  // Si account_id está vacío, auto-detectar
+  if (!conn.account_id && conn.access_token) {
+    const account = await autoDetectAccountId(conn.access_token);
+    if (account) {
+      await pool.query(
+        `UPDATE platform_connections SET account_id=$1, account_name=$2
+         WHERE client_id=$3 AND platform='meta_ads'`,
+        [account.id, account.name, clientId]
+      );
+      conn.account_id   = account.id;
+      conn.account_name = account.name;
+    }
+  }
+
+  return conn;
 }
 
 async function getGoogleConn(clientId) {
