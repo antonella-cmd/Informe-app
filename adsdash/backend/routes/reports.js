@@ -102,8 +102,8 @@ router.post('/', async (req, res, next) => {
     if (!client_id || !name) return res.status(400).json({ error: 'client_id y name son requeridos' });
 
     const { rows } = await pool.query(`
-      INSERT INTO reports (client_id, created_by_user_id, name, config_json, created_at, last_run_at)
-      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      INSERT INTO reports (client_id, created_by_user_id, created_by, name, title, config_json, config, created_at, last_run_at)
+      VALUES ($1, $2, $2, $3, $3, $4, $4, NOW(), NOW())
       RETURNING *
     `, [client_id, userId, name, JSON.stringify(config || {})]);
 
