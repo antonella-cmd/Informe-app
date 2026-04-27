@@ -9,6 +9,45 @@ config();
 
 const GRAPH = 'https://graph.facebook.com/v20.0';
 
+// ── Extraer todas las métricas de e-commerce de Meta ──────
+function extractMetaMetrics(row) {
+  const actions      = row.actions       || [];
+  const actionValues = row.action_values || [];
+
+  const findAction = (type) => Number(actions.find(a => a.action_type === type)?.value || 0);
+  const findValue  = (type) => Number(actionValues.find(a => a.action_type === type)?.value || 0);
+
+  const purchases        = findAction('purchase') || findAction('offsite_conversion.fb_pixel_purchase') || findAction('omni_purchase');
+  const purchaseValue    = findValue('purchase')  || findValue('offsite_conversion.fb_pixel_purchase')  || findValue('omni_purchase');
+  const addToCart        = findAction('add_to_cart') || findAction('offsite_conversion.fb_pixel_add_to_cart') || findAction('omni_add_to_cart');
+  const checkoutInit     = findAction('initiate_checkout') || findAction('offsite_conversion.fb_pixel_initiate_checkout') || findAction('omni_initiated_checkout');
+  const igFollow         = findAction('like') || findAction('onsite_conversion.follow') || findAction('follow');
+  const spend            = Number(row.spend || 0);
+
+  return {
+    impressions:   Number(row.impressions || 0),
+    clicks:        Number(row.clicks      || 0),
+    spend,
+    ctr:           Number(row.ctr       || 0),
+    cpc:           Number(row.cpc       || 0),
+    cpm:           Number(row.cpm       || 0),
+    reach:         Number(row.reach     || 0),
+    frequency:     Number(row.frequency || 0),
+    purchases,
+    purchase_value: purchaseValue,
+    add_to_cart:    addToCart,
+    checkout_initiated: checkoutInit,
+    ig_follows:     igFollow,
+    // Calculados
+    roas:           spend > 0 && purchaseValue > 0 ? purchaseValue / spend : 0,
+    cost_per_purchase: purchases > 0 ? spend / purchases : 0,
+    conversions:    purchases,
+    revenue:        purchaseValue,
+  };
+}
+
+
+
 export function getMetaAuthUrl(state) {
   const params = new URLSearchParams({
     client_id:     process.env.META_APP_ID,
@@ -164,22 +203,8 @@ export async function fetchMetaSummary(clientId, { startDate, endDate, accountId
     level:      'account',
   }, token);
 
-  const row         = data.data?.[0] || {};
-  const conversions = (row.actions || []).find(a => a.action_type === 'purchase')?.value || 0;
-  const revenue     = (row.action_values || []).find(a => a.action_type === 'purchase')?.value || 0;
-
-  return {
-    impressions: Number(row.impressions || 0),
-    clicks:      Number(row.clicks      || 0),
-    spend:       Number(row.spend       || 0),
-    conversions: Number(conversions),
-    revenue:     Number(revenue),
-    ctr:         Number(row.ctr       || 0),
-    cpc:         Number(row.cpc       || 0),
-    cpm:         Number(row.cpm       || 0),
-    reach:       Number(row.reach     || 0),
-    frequency:   Number(row.frequency || 0),
-  };
+  const row = data.data?.[0] || {};
+  return extractMetaMetrics(row);
 }
 
 // ── Campaigns ─────────────────────────────────────────────
@@ -198,25 +223,14 @@ export async function fetchMetaCampaigns(clientId, { startDate, endDate, account
 
   return (data.data || []).map(c => {
     const ins     = c.insights?.data?.[0] || {};
-    const conv    = (ins.actions      || []).find(a => a.action_type === 'purchase')?.value || 0;
-    const revenue = (ins.action_values|| []).find(a => a.action_type === 'purchase')?.value || 0;
-    const spend   = Number(ins.spend || 0);
+    const metrics = extractMetaMetrics(ins);
     return {
-      id:          c.id,
-      name:        c.name,
-      status:      c.status,
-      objective:   c.objective,
-      impressions: Number(ins.impressions || 0),
-      clicks:      Number(ins.clicks      || 0),
-      spend,
-      conversions: Number(conv),
-      revenue:     Number(revenue),
-      ctr:         Number(ins.ctr || 0),
-      cpc:         Number(ins.cpc || 0),
-      cpm:         Number(ins.cpm || 0),
-      cpa:         Number(conv) > 0 ? spend / Number(conv) : 0,
-      roas:        Number(revenue) > 0 && spend > 0 ? Number(revenue) / spend : 0,
-      platform:    'meta_ads',
+      id:        c.id,
+      name:      c.name,
+      status:    c.status,
+      objective: c.objective,
+      platform:  'meta_ads',
+      ...metrics,
     };
   });
 }
@@ -235,17 +249,8 @@ export async function fetchMetaTimeSeries(clientId, { startDate, endDate, accoun
   }, token);
 
   return (data.data || []).map(r => {
-    const conv    = (r.actions       || []).find(a => a.action_type === 'purchase')?.value || 0;
-    const revenue = (r.action_values || []).find(a => a.action_type === 'purchase')?.value || 0;
-    return {
-      date:        r.date_start,
-      impressions: Number(r.impressions || 0),
-      clicks:      Number(r.clicks      || 0),
-      spend:       Number(r.spend       || 0),
-      conversions: Number(conv),
-      revenue:     Number(revenue),
-      platform:    'meta_ads',
-    };
+    const metrics = extractMetaMetrics(r);
+    return { date: r.date_start, platform: 'meta_ads', ...metrics };
   });
 }
 
