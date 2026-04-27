@@ -185,7 +185,7 @@ router.get('/:clientId/meta/ads', requireClientAccess, async (req, res, next) =>
         'campaign{id,name}',
         'adset{id,name}',
         'creative{id,name,thumbnail_url,image_url,video_id,body,title,object_type,call_to_action_type}',
-        `insights.fields(impressions,clicks,spend,actions,action_values,ctr,cpc,cpm,reach,frequency).time_range({"since":"${start}","until":"${end}"})`,
+        `insights.fields(impressions,clicks,spend,actions,action_values,ctr,cpc,cpm,reach,frequency,cost_per_action_type).time_range({"since":"${start}","until":"${end}"})`,
       ].join(','),
       limit: 100,
     }, access_token);
@@ -212,13 +212,21 @@ router.get('/:clientId/meta/ads', requireClientAccess, async (req, res, next) =>
 
     const ads = rawAds.map(ad => {
       const ins = ad.insights?.data?.[0] || {};
-      const conv = (ins.actions || []).find(a => a.action_type === 'purchase')?.value || 0;
-      const revenue = (ins.action_values || []).find(a => a.action_type === 'purchase')?.value || 0;
-      const spend = Number(ins.spend || 0);
+      const actions      = ins.actions       || [];
+      const actionValues = ins.action_values || [];
+      const findA = (t) => Number(actions.find(a=>a.action_type===t)?.value||0);
+      const findV = (t) => Number(actionValues.find(a=>a.action_type===t)?.value||0);
+
+      const purchases     = findA('purchase')||findA('offsite_conversion.fb_pixel_purchase')||findA('omni_purchase');
+      const purchaseValue = findV('purchase')||findV('offsite_conversion.fb_pixel_purchase')||findV('omni_purchase');
+      const addToCart     = findA('add_to_cart')||findA('offsite_conversion.fb_pixel_add_to_cart')||findA('omni_add_to_cart');
+      const checkoutInit  = findA('initiate_checkout')||findA('offsite_conversion.fb_pixel_initiate_checkout')||findA('omni_initiated_checkout');
+      const igFollows     = findA('like')||findA('onsite_conversion.follow')||findA('follow');
+      const spend         = Number(ins.spend || 0);
+
       const cr = ad.creative || {};
       const videoId = cr.video_id;
-      const imageUrl = cr.image_url || cr.thumbnail_url ||
-        (videoId ? videoThumbs[videoId] : null);
+      const imageUrl = cr.image_url || cr.thumbnail_url || (videoId ? videoThumbs[videoId] : null);
 
       return {
         ad_id: ad.id,
@@ -235,18 +243,24 @@ router.get('/:clientId/meta/ads', requireClientAccess, async (req, res, next) =>
         body: cr.body,
         cta: cr.call_to_action_type,
         ad_url: `https://www.facebook.com/ads/library/?id=${ad.id}`,
-        impressions: Number(ins.impressions || 0),
-        clicks: Number(ins.clicks || 0),
+        impressions:        Number(ins.impressions || 0),
+        clicks:             Number(ins.clicks      || 0),
         spend,
-        conversions: Number(conv),
-        revenue: Number(revenue),
-        ctr: Number(ins.ctr || 0),
-        cpc: Number(ins.cpc || 0),
-        cpm: Number(ins.cpm || 0),
-        reach: Number(ins.reach || 0),
-        frequency: Number(ins.frequency || 0),
-        roas: spend > 0 && Number(revenue) > 0 ? Number(revenue) / spend : 0,
-        cpa: Number(conv) > 0 ? spend / Number(conv) : 0,
+        ctr:                Number(ins.ctr       || 0),
+        cpc:                Number(ins.cpc       || 0),
+        cpm:                Number(ins.cpm       || 0),
+        reach:              Number(ins.reach     || 0),
+        frequency:          Number(ins.frequency || 0),
+        purchases,
+        purchase_value:     purchaseValue,
+        add_to_cart:        addToCart,
+        checkout_initiated: checkoutInit,
+        ig_follows:         igFollows,
+        roas:               spend > 0 && purchaseValue > 0 ? purchaseValue / spend : 0,
+        cost_per_purchase:  purchases > 0 ? spend / purchases : 0,
+        conversions:        purchases,
+        revenue:            purchaseValue,
+        cpa:                purchases > 0 ? spend / purchases : 0,
       };
     });
 
