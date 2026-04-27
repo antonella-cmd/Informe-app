@@ -932,18 +932,32 @@ export default function ReportBuilder(){
         start_date:s,end_date:e,preset,comp_type:compType,
         blocks:blocks.map(b=>({type:b.type,label:b.label,config:b.config})),
       }});
-      setSavedReportId(res.data?.id||res.data?.report?.id);
-      setSaved(true);setTimeout(()=>setSaved(false),3000);
-    }catch(e){console.error(e);}finally{setSaving(false);}
+      // POST /reports devuelve el row directamente
+      const newId=res.data?.id||res.data?.report?.id;
+      setSavedReportId(newId);
+      setSaved(true);
+      setTimeout(()=>setSaved(false),3000);
+    }catch(e){
+      console.error('Error guardando reporte:',e);
+      alert('Error al guardar el informe: '+(e.response?.data?.error||e.message));
+    }finally{setSaving(false);}
   };
 
   const handleShare=async()=>{
-    if(!savedReportId){alert('Primero guardá el informe');return;}
+    if(!savedReportId){
+      alert('Primero guardá el informe con un nombre y hacé clic en Guardar');
+      return;
+    }
     setSharing(true);
     try{
       const res=await reportsAPI.share(savedReportId);
-      setShareUrl(res.data.share_url||res.data.url||'');
-    }catch(e){console.error(e);}finally{setSharing(false);}
+      const url=res.data?.share_url||res.data?.url||'';
+      setShareUrl(url);
+      if(url) navigator.clipboard.writeText(url).catch(()=>{});
+    }catch(e){
+      console.error('Error generando link:',e);
+      alert('Error al generar el link: '+(e.response?.data?.error||e.message));
+    }finally{setSharing(false);}
   };
 
   const copyShareUrl=()=>{
@@ -1070,16 +1084,17 @@ export default function ReportBuilder(){
               ⬇ PDF
             </button>
           </div>
-          <button onClick={handleShare} disabled={sharing||!savedReportId} style={{width:'100%',padding:'8px',borderRadius:7,border:'1px solid rgba(55,138,221,0.4)',background:'rgba(55,138,221,0.08)',color:'#378ADD',cursor:savedReportId?'pointer':'not-allowed',fontSize:11,opacity:savedReportId?1:0.5,marginBottom:shareUrl?6:0}}>
+          <button onClick={handleShare} disabled={sharing} style={{width:'100%',padding:'9px',borderRadius:7,border:'1px solid rgba(55,138,221,0.4)',background:'rgba(55,138,221,0.08)',color:'#378ADD',cursor:'pointer',fontSize:12,fontWeight:500,marginBottom:shareUrl?6:0,opacity:sharing?0.6:1}}>
             {sharing?'Generando link…':'🔗 Compartir con link'}
           </button>
+          {!savedReportId&&<div style={{fontSize:10,color:'var(--muted)',textAlign:'center',marginBottom:4}}>Guardá primero el informe</div>}
           {shareUrl&&(
-            <div style={{background:'rgba(52,199,138,0.08)',border:'1px solid rgba(52,199,138,0.3)',borderRadius:7,padding:'8px 10px',marginTop:4}}>
-              <div style={{fontSize:10,color:'#34C78A',marginBottom:4,fontWeight:600}}>✓ Link generado — válido 30 días</div>
-              <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                <div style={{flex:1,fontSize:10,color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{shareUrl}</div>
-                <button onClick={copyShareUrl} style={{flexShrink:0,padding:'3px 8px',borderRadius:5,border:'1px solid var(--border)',background:'var(--bg)',color:'var(--text)',cursor:'pointer',fontSize:10}}>Copiar</button>
-              </div>
+            <div style={{background:'rgba(52,199,138,0.08)',border:'1px solid rgba(52,199,138,0.3)',borderRadius:7,padding:'10px 12px',marginTop:4}}>
+              <div style={{fontSize:11,color:'#34C78A',marginBottom:6,fontWeight:600}}>✓ Link generado — válido 30 días</div>
+              <div style={{fontSize:10,color:'var(--muted)',wordBreak:'break-all',marginBottom:8,lineHeight:1.5}}>{shareUrl}</div>
+              <button onClick={copyShareUrl} style={{width:'100%',padding:'6px',borderRadius:5,border:'1px solid rgba(52,199,138,0.4)',background:'rgba(52,199,138,0.1)',color:'#34C78A',cursor:'pointer',fontSize:11,fontWeight:600}}>
+                Copiar link
+              </button>
             </div>
           )}
         </div>
