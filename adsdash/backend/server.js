@@ -1,5 +1,5 @@
 // ============================================================
-// server.js — con sesiones persistentes en PostgreSQL
+// server.js — PTI Analytics (completo y final)
 // ============================================================
 import express from 'express';
 import cors from 'cors';
@@ -9,22 +9,22 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { config } from 'dotenv';
 import { pool, bootstrapSchema } from './db.js';
-import authRoutes      from './routes/auth.js';
-import googleAdsRoutes from './routes/googleAds.js';
-import metaAdsRoutes   from './routes/metaAds.js';
-import clientsRoutes   from './routes/clients.js';
-import reportsRoutes   from './routes/reports.js';
-import dashboardRoutes from './routes/dashboard.js';
-import aiRoutes        from './routes/ai.js';
-import uploadRoutes    from './routes/upload.js';
-import adminRoutes     from './routes/admin.js';
+import authRoutes       from './routes/auth.js';
+import googleAdsRoutes  from './routes/googleAds.js';
+import metaAdsRoutes    from './routes/metaAds.js';
+import clientsRoutes    from './routes/clients.js';
+import reportsRoutes    from './routes/reports.js';
+import dashboardRoutes  from './routes/dashboard.js';
+import aiRoutes         from './routes/ai.js';
+import uploadRoutes     from './routes/upload.js';
+import adminRoutes      from './routes/admin.js';
+import reportDataRoutes from './routes/reportData.js';
 
 config();
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
 
-// Sesiones persistentes en PostgreSQL
 const PgSession = connectPgSimple(session);
 
 app.set('trust proxy', 1);
@@ -38,9 +38,9 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use(session({
   store: new PgSession({
-    pool,                     // usa el mismo pool de PostgreSQL
+    pool,
     tableName: 'user_sessions',
-    createTableIfMissing: true, // crea la tabla automáticamente
+    createTableIfMissing: true,
   }),
   secret: process.env.SESSION_SECRET,
   resave: false,
@@ -52,7 +52,7 @@ app.use(session({
   },
 }));
 
-// Cargar rol en sesión en cada request
+// Cargar rol en sesión
 app.use(async (req, res, next) => {
   if (req.session?.userId && !req.session?.role) {
     try {
@@ -64,15 +64,16 @@ app.use(async (req, res, next) => {
 });
 
 // Rutas
-app.use('/api/auth',      authRoutes);
-app.use('/api/google',    googleAdsRoutes);
-app.use('/api/meta',      metaAdsRoutes);
-app.use('/api/clients',   clientsRoutes);
-app.use('/api/reports',   reportsRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/ai',        aiRoutes);
-app.use('/api/upload',    uploadRoutes);
-app.use('/api/admin',     adminRoutes);
+app.use('/api/auth',        authRoutes);
+app.use('/api/google',      googleAdsRoutes);
+app.use('/api/meta',        metaAdsRoutes);
+app.use('/api/clients',     clientsRoutes);
+app.use('/api/reports',     reportsRoutes);
+app.use('/api/dashboard',   dashboardRoutes);
+app.use('/api/ai',          aiRoutes);
+app.use('/api/upload',      uploadRoutes);
+app.use('/api/admin',       adminRoutes);
+app.use('/api/report-data', reportDataRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', ts: new Date() }));
 
