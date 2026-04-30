@@ -39,7 +39,7 @@ export default function AIInsightsPage() {
     setAnalysis(null);
     try {
       const { data } = await axios.post(
-        `${API}/api/ai/${clientId}/insights`,
+        `${API}/ai/${clientId}/insights`,
         { start_date: startDate, end_date: endDate },
         { withCredentials: true }
       );
