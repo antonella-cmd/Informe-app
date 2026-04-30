@@ -28,8 +28,8 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const [usersRes, healthRes] = await Promise.all([
-        axios.get(`${API}/api/admin/users`, { withCredentials: true }),
-        axios.get(`${API}/api/admin/health`, { withCredentials: true }),
+        axios.get(`${API}/admin/users`, { withCredentials: true }),
+        axios.get(`${API}/admin/health`, { withCredentials: true }),
       ]);
       setUsers(usersRes.data.items || []);
       setHealth(healthRes.data);
@@ -50,7 +50,7 @@ export default function AdminPage() {
     setSaving(true);
     setFormError('');
     try {
-      await axios.post(`${API}/api/admin/users`, form, { withCredentials: true });
+      await axios.post(`${API}/admin/users`, form, { withCredentials: true });
       setShowCreate(false);
       setForm({ name: '', email: '', password: '', role: 'editor' });
       load();
@@ -63,7 +63,7 @@ export default function AdminPage() {
 
   const changeRole = async (userId, newRole) => {
     try {
-      await axios.put(`${API}/api/admin/users/${userId}/role`, { role: newRole }, { withCredentials: true });
+      await axios.put(`${API}/admin/users/${userId}/role`, { role: newRole }, { withCredentials: true });
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
     } catch (e) {
       alert(e.response?.data?.error || 'Error al cambiar rol');
@@ -73,7 +73,7 @@ export default function AdminPage() {
   const deleteUser = async (userId, name) => {
     if (!confirm(`¿Eliminar a ${name}?`)) return;
     try {
-      await axios.delete(`${API}/api/admin/users/${userId}`, { withCredentials: true });
+      await axios.delete(`${API}/admin/users/${userId}`, { withCredentials: true });
       setUsers(prev => prev.filter(u => u.id !== userId));
     } catch (e) {
       alert(e.response?.data?.error || 'Error al eliminar usuario');
