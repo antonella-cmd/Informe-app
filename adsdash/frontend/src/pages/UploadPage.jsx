@@ -43,7 +43,7 @@ export default function UploadPage() {
       const form = new FormData();
       form.append('file', file);
       const { data } = await axios.post(
-        `${API}/api/upload/${clientId}/excel`,
+        `${API}/upload/${clientId}/excel`,
         form,
         { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } }
       );
@@ -62,7 +62,7 @@ export default function UploadPage() {
     setResult(null);
     try {
       const { data } = await axios.post(
-        `${API}/api/upload/${clientId}/gsheet`,
+        `${API}/upload/${clientId}/gsheet`,
         { sheet_url: sheetUrl },
         { withCredentials: true }
       );
