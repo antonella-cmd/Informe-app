@@ -61,13 +61,14 @@ router.get('/adsets', requireClientAccess, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-export default router;
-
 // GET /api/meta/diagnose?clientId=X — diagnóstico completo de la conexión
 router.get('/diagnose', requireClientAccess, async (req, res, next) => {
   try {
     const { clientId } = req.query;
-    const { rows } = await (await import('../db.js')).pool.query(
+    const { pool } = await import('../db.js');
+    const fetch = (await import('node-fetch')).default;
+
+    const { rows } = await pool.query(
       `SELECT access_token, account_id, account_name, token_expires_at
        FROM platform_connections WHERE client_id=$1 AND platform='meta_ads'`,
       [clientId]
@@ -85,11 +86,14 @@ router.get('/diagnose', requireClientAccess, async (req, res, next) => {
       token_expires_at: conn.token_expires_at,
     };
 
-    // Probar el token
+    // Probar el token usando URLSearchParams para evitar problemas con caracteres especiales
     if (conn.access_token) {
       try {
-        const testUrl = `https://graph.facebook.com/v20.0/me?access_token=${conn.access_token}&fields=id,name`;
-        const testRes = await (await import('node-fetch')).default(testUrl);
+        const testUrl = 'https://graph.facebook.com/v20.0/me?' + new URLSearchParams({
+          access_token: conn.access_token,
+          fields: 'id,name',
+        });
+        const testRes = await fetch(testUrl);
         const testData = await testRes.json();
         if (testData.error) {
           result.token_valid = false;
@@ -103,13 +107,22 @@ router.get('/diagnose', requireClientAccess, async (req, res, next) => {
         result.token_error = e.message;
       }
 
-      // Listar cuentas disponibles
+      // Listar TODAS las cuentas disponibles con paginación
       try {
-        const accsUrl = `https://graph.facebook.com/v20.0/me/adaccounts?access_token=${conn.access_token}&fields=id,name,account_status&limit=10`;
-        const accsRes = await (await import('node-fetch')).default(accsUrl);
-        const accsData = await accsRes.json();
-        result.available_accounts = accsData.data || [];
-        result.accounts_error = accsData.error?.message;
+        let allAccounts = [];
+        let url = 'https://graph.facebook.com/v20.0/me/adaccounts?' + new URLSearchParams({
+          access_token: conn.access_token,
+          fields: 'id,name,account_status',
+          limit: 100,
+        });
+        while (url) {
+          const accsRes = await fetch(url);
+          const accsData = await accsRes.json();
+          if (accsData.error) { result.accounts_error = accsData.error.message; break; }
+          allAccounts = allAccounts.concat(accsData.data || []);
+          url = accsData.paging?.next || null;
+        }
+        result.available_accounts = allAccounts;
       } catch (e) {
         result.available_accounts = [];
         result.accounts_error = e.message;
@@ -119,3 +132,5 @@ router.get('/diagnose', requireClientAccess, async (req, res, next) => {
     res.json(result);
   } catch (e) { next(e); }
 });
+
+export default router;
