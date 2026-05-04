@@ -179,16 +179,32 @@ async function metaGet(path, params, token) {
 // ── Listar cuentas de ads disponibles ─────────────────────
 export async function listAdAccounts(clientId) {
   const { access_token } = await getToken(clientId);
-  const data = await metaGet('me/adaccounts', {
+
+  let allAccounts = [];
+  let url = `${GRAPH}/me/adaccounts?` + new URLSearchParams({
     fields: 'id,name,currency,account_status,amount_spent',
-  }, access_token);
-  return (data.data || []).map(a => ({
-    id:       a.id,
-    name:     a.name,
-    currency: a.currency,
-    status:   a.account_status,
-    spent:    Number(a.amount_spent) / 100,
-  }));
+    limit: 100,
+    access_token,
+  });
+
+  while (url) {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(`Meta API: ${data.error.message}`);
+
+    const page = (data.data || []).map(a => ({
+      id:       a.id,
+      name:     a.name,
+      currency: a.currency,
+      status:   a.account_status,
+      spent:    Number(a.amount_spent) / 100,
+    }));
+    allAccounts = allAccounts.concat(page);
+
+    url = data.paging?.next || null;
+  }
+
+  return allAccounts;
 }
 
 // ── Account summary ────────────────────────────────────────
