@@ -52,6 +52,7 @@ export default function ConnectionsPage() {
   const [metaDiag, setMetaDiag]                 = useState(null);
   const [diagLoading, setDiagLoading]           = useState(false);
   const [showSelector, setShowSelector]         = useState(false);
+  const [forceShowSelector, setForceShowSelector] = useState(false);
 
   const reload = () =>
     clientsAPI.get(clientId).then(r => {
@@ -114,6 +115,7 @@ export default function ConnectionsPage() {
       });
       setMetaSaved(true);
       setShowSelector(false);
+      setForceShowSelector(false);
       reload();
       // Re-diagnóstico después de guardar
       setTimeout(() => runMetaDiag(), 800);
@@ -126,7 +128,7 @@ export default function ConnectionsPage() {
     await api.delete(`/clients/${clientId}/connections/${platform}`);
     setConns(prev => prev.filter(c => c.platform !== platform));
     if (platform === 'google_ads') { setGoogleSaved(false); setGoogleAccounts([]); }
-    if (platform === 'meta_ads')   { setMetaSaved(false); setMetaDiag(null); }
+    if (platform === 'meta_ads')   { setMetaSaved(false); setMetaDiag(null); setForceShowSelector(false); }
   };
 
   const runMetaDiag = async () => {
@@ -285,7 +287,7 @@ export default function ConnectionsPage() {
               )}
 
               {/* Selector de cuenta Meta */}
-              {(showSelector || (!mConn.account_id && metaAccounts.length > 0)) && !metaSaved && (
+              {(showSelector || forceShowSelector || (!mConn.account_id && metaAccounts.length > 0)) && !metaSaved && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Seleccioná la cuenta de Meta Ads:</div>
                   <select value={selectedMeta} onChange={e => setSelectedMeta(e.target.value)}
@@ -305,6 +307,12 @@ export default function ConnectionsPage() {
                   style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
                   {diagLoading ? 'Diagnosticando…' : '🔍 Diagnosticar'}
                 </button>
+                {mConn.account_id && metaAccounts.length > 0 && !forceShowSelector && (
+                  <button onClick={() => setForceShowSelector(true)}
+                    style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #0866FF44', background: 'rgba(8,102,255,0.08)', color: '#0866FF', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}>
+                    🔄 Cambiar cuenta
+                  </button>
+                )}
                 <button onClick={() => disconnect('meta_ads')} style={{ flex: 1, padding: '9px', borderRadius: 8, border: '1px solid #FF4D6A44', background: 'rgba(255,77,106,0.08)', color: '#FF4D6A', cursor: 'pointer', fontSize: 12 }}>
                   Desconectar
                 </button>
